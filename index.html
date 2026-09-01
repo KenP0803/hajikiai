@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 2.0.0</title>
+<title>はじきあい 2.1.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -135,6 +135,9 @@ canvas{ display:block; border-radius:12px; border:1px solid var(--line); backgro
 #dataHead{ font-size:11px; color:var(--dim); text-align:center; line-height:1.6; flex:0 0 auto }
 #dataHead b{ color:var(--text) }
 #dataNote{ font-size:10px; color:#6b5f53; text-align:center; line-height:1.5; padding-bottom:4px }
+/* 3つの塊に分ける。何をまとめて何を分けたかが、見出しで分かるように */
+.dcap{ font-size:10.5px; font-weight:700; color:var(--gold); padding:10px 2px 3px }
+.dcap:first-child{ padding-top:2px }
 table.dt{ width:100%; border-collapse:collapse; font-size:10.5px; table-layout:fixed }
 table.dt th{ color:var(--dim); font-weight:500; font-size:9.5px; padding:3px 1px; border-bottom:1px solid var(--line) }
 table.dt td{ padding:5px 1px; border-bottom:1px solid #241f1b; text-align:center;
@@ -374,9 +377,20 @@ let record = { win:0, lose:0 };
 /* ===== 遊んだ記録（バランス調整用） =====
    端末の中だけに貯まる。画面に出して見せる以外、どこにも送らない。
    ボットで測ると「狙いが絡むスキル」を読み違えるため、人が遊んだ数字が要る */
-let stats = {};    // コマのid -> 成績
-let mstat = { n:0, w:0, hn:0, hw:0, since:0 };   // 試合数・勝ち数（hはむずかしい）・貯め始めた日時
-const st = id => (stats[id] = stats[id] || { t:0, d:0, z:0, ko:0, died:0, w:0, l:0 });
+/* 何を分けて、何をまとめるか。ここを間違えると集めた数字が使えなくなる。
+     勝率・残りライフ …… モード別。相手のライフが違うので混ぜられない
+     使用率・平均ダメージ … まとめてよい。モードで変わらない性質だから
+   勝率は「難易度が合っているか」を見る数字であって、
+   「どのコマが強いか」を見る数字ではない。手柄が3体のどれのものか分からないうえ、
+   1試合で1つしか増えないので、必要な試合数が桁違いに多くなる */
+let stats = {};    // コマのid -> { t はじいた, d ダメージ, z 空振り, ko 倒した, dd やられた, p 編成に入れた }
+let comps = {};    // 'n|bear+fox+wolf' -> { n 試合, w 勝ち, mw 勝った時の自分の残りライフ合計 }
+const newMode = () => ({ n:0, w:0, tn:0, mw:0, ml:0 });
+let mstat = { n:newMode(), h:newMode(), since:0 };   // n=ふつう h=むずかしい
+const st = id => (stats[id] = stats[id] || { t:0, d:0, z:0, ko:0, dd:0, p:0 });
+const cmpKey = () => (hardOn ? 'h|' : 'n|') + myPick.slice().sort().join('+');
+const cmp = k => (comps[k] = comps[k] || { n:0, w:0, mw:0 });
+const allN = () => mstat.n.n + mstat.h.n;
 let turnStartD = 0;   // このターンの開始時点で、弾いたコマが与えていた合計
 /* 「うまくやった」と思わせるための表示。
    当てた瞬間だけでなく、ターン全体の成果を見せるのが効く */
@@ -421,9 +435,11 @@ function save(){
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
       const old = JSON.parse(raw);
-      if (old && old.mstat && old.mstat.n > mstat.n) return;
+      const oldN = old && old.mstat && old.mstat.n && typeof old.mstat.n === 'object'
+        ? old.mstat.n.n + old.mstat.h.n : 0;
+      if (oldN > allN()) return;
     }
-    const d = { v:SAVE_VER, pick:myPick, unlocked, record, hardOn, stats, mstat };
+    const d = { v:SAVE_VER, pick:myPick, unlocked, record, hardOn, stats, mstat, comps };
     // 途中の試合も残す。ただし「編成中でなく、玉が止まっていて操作待ち」の時だけ。
     // 編成中も保存すると、リロード時に始めていない試合が再開されてしまう
     if (!picking && !over && phase === 'aim' && pieces && pieces.length) {
@@ -733,7 +749,7 @@ function damage(target, amount, kind, src){
 /* 落とされたコマは盤面から消え、チームのライフをコストぶん減らす。
    復活は「自分のチームのターンが来た時に、倒れている味方が全員まとめて」 */
 function knockOut(p, src){
-  if (p.team === 'me') st(p.id).died++;
+  if (p.team === 'me') st(p.id).dd++;
   else if (src && src.team === 'me') st(src.id).ko++;
   p.cur = 0; p.alive = false; p.vx = p.vy = 0;
   life[p.team] -= p.cost;
@@ -846,9 +862,14 @@ function finish(won){
   document.getElementById('over').classList.add('show');
   record[won ? 'win' : 'lose']++;
   if (!mstat.since) mstat.since = Date.now();   // 消えたことが目で分かるように
-  mstat.n++; if (won) mstat.w++;
-  if (hardOn) { mstat.hn++; if (won) mstat.hw++; }
-  for (const q of roster.me) st(q.id)[won ? 'w' : 'l']++;
+  const M = hardOn ? mstat.h : mstat.n;
+  M.n++; M.tn += turnCount;
+  if (won) { M.w++; M.mw += life.me; } else { M.ml += life.foe; }
+  // 使用率は「編成に入れた回数 ÷ 全試合数」。強さと人気は別ものなので、別に数える
+  for (const q of roster.me) st(q.id).p++;
+  // 編成ごとの成績。圧勝しやすい組み合わせを見るため。実際に使う編成は数種類なので数が貯まる
+  const c = cmp(cmpKey());
+  c.n++; if (won) { c.w++; c.mw += life.me; }
   sync();
   save();
 }
@@ -1127,7 +1148,7 @@ ioAdd.addEventListener('click', () => {
   save(); renderData();
   ioText.value = ''; ioText.classList.remove('show'); ioAdd.classList.remove('show');
   ioCode.classList.remove('show');
-  ioMsg.textContent = g.m.n + ' しあい ぶんを たしました';
+  ioMsg.textContent = (g.m.n.n + g.m.h.n) + ' しあい ぶんを たしました';
 });
 
 document.getElementById('navPrev').addEventListener('click', () => goScreen(scr - 1));
@@ -1155,7 +1176,7 @@ document.getElementById('guideBtn').addEventListener('click', () => {
 document.getElementById('wipeBtn').addEventListener('click', () => {
   clearSave();
   record = { win:0, lose:0 };
-  stats = {}; mstat = { n:0, w:0, hn:0, hw:0, since:0 };
+  stats = {}; comps = {}; mstat = { n:newMode(), h:newMode(), since:0 };
   myPick = ['fox','wolf','bear'];
   unlocked = FREE.slice();
   hardOn = false;
@@ -1243,29 +1264,56 @@ function setPickInfo(p){
 
 /* 記録の画面。ボットの数字は当てにならないので、人が遊んだ数字をここに出す */
 function renderData(){
-  const w = mstat.n ? Math.round(mstat.w / mstat.n * 100) : 0;
-  document.getElementById('dataHead').innerHTML =
-    '<b>' + mstat.n + '</b> しあい　<b>' + mstat.w + '</b> しょう（' + w + '%）' +
-    (mstat.hn ? '<br>うち むずかしい <b>' + mstat.hn + '</b> しあい <b>' + mstat.hw + '</b> しょう' : '');
+  const M = mstat, tot = allN();
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '-';
 
-  const rows = POOL.map(p => {
+  /* ① 難易度。ここだけはモード別に見る。相手のライフが違うので混ぜられない */
+  const line = (nm, m) => !m.n ? '' :
+    '<tr><td class="nm">' + nm + '</td><td>' + m.n + '</td>' +
+    '<td class="big">' + pct(m.w, m.n) + '</td>' +
+    '<td>' + (m.tn / m.n).toFixed(0) + '</td>' +
+    '<td>' + (m.w ? (m.mw / m.w).toFixed(1) : '-') + '</td>' +
+    '<td>' + (m.n - m.w ? (m.ml / (m.n - m.w)).toFixed(1) : '-') + '</td></tr>';
+  const modeRows = line('ふつう', M.n) + line('むずかしい', M.h);
+
+  /* ② コマ。ここはモードをまとめる。1回のダメージも使用率もモードで変わらないため */
+  const pieceRows = POOL.map(p => {
     const v = stats[p.id];
     if (!v || !v.t) return '<tr class="none"><td class="nm">' + p.face + p.name +
-      '</td><td>0</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>';
-    const avg = (v.d / v.t).toFixed(1);
-    const zero = Math.round(v.z / v.t * 100);
-    const g = v.w + v.l;
+      '</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>';
     return '<tr><td class="nm">' + p.face + p.name + '</td>' +
-      '<td>' + v.t + '</td>' +
-      '<td class="big">' + avg + '</td>' +
-      '<td>' + zero + '%</td>' +
-      '<td>' + v.ko + ' / ' + v.died + '</td>' +
-      '<td>' + (g ? Math.round(v.w / g * 100) + '%' : '-') + '</td></tr>';
+      '<td class="big">' + (v.d / v.t).toFixed(1) + '</td>' +
+      '<td>' + pct(v.p, tot) + '</td>' +
+      '<td>' + pct(v.z, v.t) + '</td>' +
+      '<td>' + v.ko + ' / ' + v.dd + '</td></tr>';
   }).join('');
 
+  /* ③ 編成。圧勝しやすい組み合わせを探す。使った編成だけ、多い順に */
+  const face = id => (POOL.find(q => q.id === id) || {}).face || '?';
+  const compRows = Object.entries(comps)
+    .sort((a, b) => b[1].n - a[1].n).slice(0, 8)
+    .map(([k, c]) => {
+      const [md, ids] = k.split('|');
+      return '<tr><td class="nm">' + ids.split('+').map(face).join('') +
+        (md === 'h' ? ' <span style="color:var(--foe)">むず</span>' : '') + '</td>' +
+        '<td>' + c.n + '</td><td class="big">' + pct(c.w, c.n) + '</td>' +
+        '<td>' + (c.w ? (c.mw / c.w).toFixed(1) : '-') + '</td></tr>';
+    }).join('');
+
+  document.getElementById('dataHead').innerHTML = tot
+    ? '<b>' + tot + '</b> しあい' : 'まだ 1しあいも していません';
+
   document.getElementById('dataTable').innerHTML =
-    '<table class="dt"><tr><th>コマ</th><th>はじいた<br>かいすう</th><th>1かいの<br>ダメージ</th>' +
-    '<th>から<br>ぶり</th><th>たおした<br>／やられた</th><th>しょうりつ</th></tr>' + rows + '</table>';
+    (modeRows ? '<div class="dcap">むずかしさ</div><table class="dt">' +
+      '<tr><th>モード</th><th>しあい</th><th>しょうりつ</th><th>ターン</th>' +
+      '<th>かった時の<br>のこり</th><th>まけた時の<br>あいての のこり</th></tr>' +
+      modeRows + '</table>' : '') +
+    '<div class="dcap">コマ（ふつうと むずかしいを あわせて）</div><table class="dt">' +
+      '<tr><th>コマ</th><th>1かいの<br>ダメージ</th><th>つかった<br>わりあい</th>' +
+      '<th>から<br>ぶり</th><th>たおした<br>／やられた</th></tr>' + pieceRows + '</table>' +
+    (compRows ? '<div class="dcap">へんせい</div><table class="dt">' +
+      '<tr><th>3たい</th><th>しあい</th><th>しょうりつ</th><th>かった時の<br>のこり</th></tr>' +
+      compRows + '</table>' : '');
 
   const el = document.getElementById('saveState');
   if (!saveOK) {
@@ -1289,53 +1337,72 @@ function renderData(){
     : 'どのコマも 30かい を こえました。くらべて 大丈夫です';
 }
 
+
 /* ===== きろくの もちだし =====
-   このページは別サイトの枠の中で動くので、ブラウザによっては
+   このページは別サイトの枠の中でも動くので、ブラウザによっては
    閉じた時に保存が消える。消えても困らないよう、文字にして持ち出せるようにする。
-   人が読める形にしてあるので、写真に撮って送っても中身が分かる */
-const IO_HEAD = 'HAJIKI1';
+   人が読める形にしてあるので、写真に撮っても中身が分かる */
+const IO_HEAD = 'HAJIKI2';   // 形を変えたら必ず上げる。古い形を黙って読むと数字が混ざる
 
 function exportCode(){
-  const L = [IO_HEAD, 'M ' + mstat.n + ' ' + mstat.w + ' ' + mstat.hn + ' ' + mstat.hw];
+  const O = [IO_HEAD];
+  const md = (tag, m) => { if (m.n) O.push('M ' + tag + ' ' + m.n + ' ' + m.w + ' ' + m.tn + ' ' + m.mw + ' ' + m.ml); };
+  md('n', mstat.n); md('h', mstat.h);
   for (const p of POOL) {
     const v = stats[p.id];
-    if (!v || !(v.t || v.w || v.l)) continue;
-    L.push(p.id + ' ' + v.t + ' ' + v.d + ' ' + v.z + ' ' + v.ko + ' ' + v.died + ' ' + v.w + ' ' + v.l);
+    if (v && (v.t || v.p)) O.push('P ' + p.id + ' ' + v.t + ' ' + v.d + ' ' + v.z + ' ' + v.ko + ' ' + v.dd + ' ' + v.p);
   }
-  return L.join('\n');
+  for (const k in comps) {
+    const c = comps[k], [tag, ids] = k.split('|');
+    if (c.n) O.push('C ' + tag + ' ' + ids + ' ' + c.n + ' ' + c.w + ' ' + c.mw);
+  }
+  return O.join('\n');
 }
 
 /* 読めなければ null。壊れた文字列で今の記録を壊さない */
 function parseCode(txt){
   const lines = String(txt).trim().split(/[\r\n]+/).map(x => x.trim()).filter(Boolean);
   if (!lines.length || lines[0] !== IO_HEAD) return null;
-  const out = { m:{ n:0, w:0, hn:0, hw:0 }, s:{} };
   const num = x => { const n = Number(x); return Number.isFinite(n) && n >= 0 ? n : null; };
+  const nums = (a, k) => { const v = a.map(num); return v.length === k && !v.some(x => x === null) ? v : null; };
+  const out = { m:{ n:newMode(), h:newMode() }, s:{}, c:{} };
+  const ids = POOL.map(p => p.id);
   for (const line of lines.slice(1)) {
     const c = line.split(/\s+/);
-    if (c[0] === 'M') {
-      const v = c.slice(1, 5).map(num);
-      if (v.length !== 4 || v.some(x => x === null)) return null;
-      out.m = { n:v[0], w:v[1], hn:v[2], hw:v[3] };
-    } else if (POOL.some(p => p.id === c[0])) {
-      const v = c.slice(1, 8).map(num);
-      if (v.length !== 7 || v.some(x => x === null)) return null;
-      out.s[c[0]] = { t:v[0], d:v[1], z:v[2], ko:v[3], died:v[4], w:v[5], l:v[6] };
+    if (c[0] === 'M' && (c[1] === 'n' || c[1] === 'h')) {
+      const v = nums(c.slice(2, 7), 5); if (!v) return null;
+      out.m[c[1]] = { n:v[0], w:v[1], tn:v[2], mw:v[3], ml:v[4] };
+    } else if (c[0] === 'P' && ids.includes(c[1])) {
+      const v = nums(c.slice(2, 8), 6); if (!v) return null;
+      out.s[c[1]] = { t:v[0], d:v[1], z:v[2], ko:v[3], dd:v[4], p:v[5] };
+    } else if (c[0] === 'C' && (c[1] === 'n' || c[1] === 'h')) {
+      const parts = String(c[2] || '').split('+');
+      if (parts.length !== 3 || parts.some(x => !ids.includes(x))) return null;
+      const v = nums(c.slice(3, 6), 3); if (!v) return null;
+      out.c[c[1] + '|' + parts.slice().sort().join('+')] = { n:v[0], w:v[1], mw:v[2] };
     } else return null;
   }
-  return out.m.n ? out : null;
+  return (out.m.n.n + out.m.h.n) ? out : null;
 }
 
 /* 足す。上書きではない——2人ぶんを合わせるための機能だから */
 function mergeCode(g){
-  mstat.n += g.m.n; mstat.w += g.m.w; mstat.hn += g.m.hn; mstat.hw += g.m.hw;
+  for (const tag of ['n', 'h']) {
+    const a = mstat[tag], b = g.m[tag];
+    a.n += b.n; a.w += b.w; a.tn += b.tn; a.mw += b.mw; a.ml += b.ml;
+    record.win += b.w; record.lose += b.n - b.w;
+  }
   if (!mstat.since) mstat.since = Date.now();
   for (const id in g.s) {
     const a = st(id), b = g.s[id];
-    a.t += b.t; a.d += b.d; a.z += b.z; a.ko += b.ko; a.died += b.died; a.w += b.w; a.l += b.l;
+    a.t += b.t; a.d += b.d; a.z += b.z; a.ko += b.ko; a.dd += b.dd; a.p += b.p;
   }
-  record.win += g.m.w; record.lose += g.m.n - g.m.w;
+  for (const k in g.c) {
+    const a = cmp(k), b = g.c[k];
+    a.n += b.n; a.w += b.w; a.mw += b.mw;
+  }
 }
+
 
 function openPick(){
   picking = true;
@@ -1390,9 +1457,14 @@ if (saved) {
     unlocked = [...new Set([...saved.unlocked, ...FREE])]
                  .filter(id => POOL.some(q => q.id === id));
   if (saved.record) record = saved.record;
-  // 遊んだ記録は、数値やルールを変えても引き継ぐ。捨てたら集めた意味がなくなる
-  if (saved.stats && typeof saved.stats === 'object') stats = saved.stats;
-  if (saved.mstat && typeof saved.mstat === 'object') mstat = { ...mstat, ...saved.mstat };
+  // 遊んだ記録は、数値やルールを変えても引き継ぐ。捨てたら集めた意味がなくなる。
+  // ただし形が違う古い記録は読まない（2.1.0 で持ち方を作り直したため）
+  if (saved.mstat && saved.mstat.n && typeof saved.mstat.n === 'object') {
+    mstat = { n:{ ...newMode(), ...saved.mstat.n }, h:{ ...newMode(), ...saved.mstat.h },
+              since: saved.mstat.since || 0 };
+    if (saved.stats && typeof saved.stats === 'object') stats = saved.stats;
+    if (saved.comps && typeof saved.comps === 'object') comps = saved.comps;
+  }
   hardOn = !!saved.hardOn;
 }
 goScreen(0);
