@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 2.1.0</title>
+<title>はじきあい 2.1.1</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -291,6 +291,30 @@ table.dt tr.none td{ color:#574e45 }
 <script>
 'use strict';
 
+/* ============================================================
+   はじきあい —— 1枚で動くターン制のはじき合い
+
+   ■ 中身の順番（/* ===== ○○ ===== *​/ で探せる）
+     調整用の数値 BAL … 手触りを変えたい時はここだけ触る
+     スキル SKILLS      … 名前と説明。POOL の skill と対
+     コマ POOL          … 7体の性能。id を足せばコマが増える
+     状態               … 試合中に動く変数
+     遊んだ記録         … バランス調整用に数える。何を分けて何をまとめるかの説明つき
+     セーブ             … serialize / applySaved だけが保存の形を知っている
+     入力 / 物理 / ターン / 描画 / UI
+     画面の切り替え     … たいせん・きろく・せってい
+     せってい / ループ / 編成画面 / きろくの もちだし
+
+   ■ 守っている決まり
+     ・保存は「減る方向に上書きしない」。空の画面が記録を消すのを防ぐ
+     ・解放は足すだけ、引かない。コマを足しても前からの人に出てくる
+     ・失敗を黙って握りつぶさない。できない事は画面に出す
+     ・見えない・押せない・触れないものは、無いのと同じ
+     ・同じことを2か所で数えない（戦績は mstat から計算する）
+
+   ■ 変えたら必ず `node check.js` を通してから公開する
+   ============================================================ */
+
 const AW = 360, AH = 540;
 
 /* ===== 調整用の数値。手触りが気に入らない時はここだけ触る ===== */
@@ -373,7 +397,10 @@ let roster = { me:[], foe:[] };
 
 /* ===== 状態 ===== */
 let pieces, spikes, turnTeam, ptr, phase, over, aim, fx, hitsThisTurn, active, flyT, life;
-let record = { win:0, lose:0 };
+/* 戦績は mstat から計算する。二重に持たない——
+   同じことを2か所で数えていると、片方だけ直し忘れて食い違う */
+const wins   = () => mstat.n.w + mstat.h.w;
+const losses = () => (mstat.n.n - mstat.n.w) + (mstat.h.n - mstat.h.w);
 /* ===== 遊んだ記録（バランス調整用） =====
    端末の中だけに貯まる。画面に出して見せる以外、どこにも送らない。
    ボットで測ると「狙いが絡むスキル」を読み違えるため、人が遊んだ数字が要る */
@@ -425,6 +452,41 @@ try {
    でないと数値をいじるたびに解放がやり直しになってしまう */
 const SAVE_VER = 2;
 
+/* ★保存する形を知っているのは、この2つだけ。
+   あちこちで組み立てていると、項目を足した時に片方だけ直し忘れる */
+function serialize(){
+  const d = { v:SAVE_VER, pick:myPick, unlocked, hardOn, stats, mstat, comps };
+  // 途中の試合も残す。ただし「編成中でなく、玉が止まっていて操作待ち」の時だけ。
+  // 編成中も保存すると、リロード時に始めていない試合が再開されてしまう
+  if (!picking && !over && phase === 'aim' && pieces && pieces.length) {
+    d.match = {
+      life, turnTeam, ptr, tc: turnCount,
+      spikes: spikes.map(sp => [Math.round(sp.x), Math.round(sp.y)]),
+      pieces: pieces.map(q => [q.id, q.team, Math.round(q.x), Math.round(q.y), q.cur, q.alive?1:0])
+    };
+  }
+  return d;
+}
+
+function applySaved(d){
+  if (!d) return;
+  if (Array.isArray(d.pick) && d.pick.length === 3 &&
+      d.pick.every(id => POOL.some(q => q.id === id))) myPick = d.pick;
+  if (Array.isArray(d.unlocked))
+    // 保存されていたものに、今の「最初から使える」を足す。引かない。
+    // 上書きにすると、コマを増やした時に、前から遊んでいる人にだけ新しいコマが出てこない
+    unlocked = [...new Set([...d.unlocked, ...FREE])].filter(id => POOL.some(q => q.id === id));
+  // 遊んだ記録は、数値やルールを変えても引き継ぐ。捨てたら集めた意味がなくなる。
+  // ただし形が違う古い記録は読まない（2.1.0 で持ち方を作り直したため）
+  if (d.mstat && d.mstat.n && typeof d.mstat.n === 'object') {
+    mstat = { n:{ ...newMode(), ...d.mstat.n }, h:{ ...newMode(), ...d.mstat.h },
+              since: d.mstat.since || 0 };
+    if (d.stats && typeof d.stats === 'object') stats = d.stats;
+    if (d.comps && typeof d.comps === 'object') comps = d.comps;
+  }
+  hardOn = !!d.hardOn;
+}
+
 function save(){
   try {
     /* ★減る方向の上書きを禁じる。
@@ -439,17 +501,7 @@ function save(){
         ? old.mstat.n.n + old.mstat.h.n : 0;
       if (oldN > allN()) return;
     }
-    const d = { v:SAVE_VER, pick:myPick, unlocked, record, hardOn, stats, mstat, comps };
-    // 途中の試合も残す。ただし「編成中でなく、玉が止まっていて操作待ち」の時だけ。
-    // 編成中も保存すると、リロード時に始めていない試合が再開されてしまう
-    if (!picking && !over && phase === 'aim' && pieces && pieces.length) {
-      d.match = {
-        life, turnTeam, ptr, tc: turnCount,
-        spikes: spikes.map(sp => [Math.round(sp.x), Math.round(sp.y)]),
-        pieces: pieces.map(q => [q.id, q.team, Math.round(q.x), Math.round(q.y), q.cur, q.alive?1:0])
-      };
-    }
-    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    localStorage.setItem(SAVE_KEY, JSON.stringify(serialize()));
   } catch (e) { /* 保存できない設定でも遊べるようにする */ }
 }
 
@@ -860,7 +912,6 @@ function finish(won){
   document.getElementById('ovText').innerHTML =
     'のこりライフ　じぶん <span class="num">' + life.me + '</span>　／　あいて <span class="num">' + life.foe + '</span>';
   document.getElementById('over').classList.add('show');
-  record[won ? 'win' : 'lose']++;
   if (!mstat.since) mstat.since = Date.now();   // 消えたことが目で分かるように
   const M = hardOn ? mstat.h : mstat.n;
   M.n++; M.tn += turnCount;
@@ -1175,7 +1226,6 @@ document.getElementById('guideBtn').addEventListener('click', () => {
 });
 document.getElementById('wipeBtn').addEventListener('click', () => {
   clearSave();
-  record = { win:0, lose:0 };
   stats = {}; comps = {}; mstat = { n:newMode(), h:newMode(), since:0 };
   myPick = ['fox','wolf','bear'];
   unlocked = FREE.slice();
@@ -1234,7 +1284,7 @@ function renderPick(){
     '<b>あいての ライフを 0 に したら かち</b><br>' +
     'あいては 🐲リュウ・👹オニ・🦂サソリ<br>' +
     (hardOn ? '<b style="color:var(--foe)">むずかしいモード ON</b>　あいてのライフ ' + foeLifeMax() + '<br>' : '') +
-    'せんせき <b>' + record.win + '</b>しょう <b>' + record.lose + '</b>はい';
+    'せんせき <b>' + wins() + '</b>しょう <b>' + losses() + '</b>はい';
   document.getElementById('pickList').innerHTML = POOL
     .filter(p => unlocked.includes(p.id))          // 解放されているコマだけ並べる
     .map(p => {
@@ -1390,7 +1440,6 @@ function mergeCode(g){
   for (const tag of ['n', 'h']) {
     const a = mstat[tag], b = g.m[tag];
     a.n += b.n; a.w += b.w; a.tn += b.tn; a.mw += b.mw; a.ml += b.ml;
-    record.win += b.w; record.lose += b.n - b.w;
   }
   if (!mstat.since) mstat.since = Date.now();
   for (const id in g.s) {
@@ -1448,25 +1497,7 @@ if (!document.querySelector('meta[name="viewport"]')) {
 }
 
 const saved = load();
-if (saved) {
-  if (Array.isArray(saved.pick) && saved.pick.length === 3 &&
-      saved.pick.every(id => POOL.some(q => q.id === id))) myPick = saved.pick;
-  if (Array.isArray(saved.unlocked))
-    // 保存されていたものに、今の「最初から使える」を足す。引かない。
-    // 上書きにすると、コマを増やした時に、前から遊んでいる人にだけ新しいコマが出てこない
-    unlocked = [...new Set([...saved.unlocked, ...FREE])]
-                 .filter(id => POOL.some(q => q.id === id));
-  if (saved.record) record = saved.record;
-  // 遊んだ記録は、数値やルールを変えても引き継ぐ。捨てたら集めた意味がなくなる。
-  // ただし形が違う古い記録は読まない（2.1.0 で持ち方を作り直したため）
-  if (saved.mstat && saved.mstat.n && typeof saved.mstat.n === 'object') {
-    mstat = { n:{ ...newMode(), ...saved.mstat.n }, h:{ ...newMode(), ...saved.mstat.h },
-              since: saved.mstat.since || 0 };
-    if (saved.stats && typeof saved.stats === 'object') stats = saved.stats;
-    if (saved.comps && typeof saved.comps === 'object') comps = saved.comps;
-  }
-  hardOn = !!saved.hardOn;
-}
+applySaved(saved);
 goScreen(0);
 reset(); fitCanvas();
 // 途中の試合が残っていれば続きから。無ければ編成画面から
