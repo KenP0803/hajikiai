@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあいver1.9</title>
+<title>はじきあいver2.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -20,8 +20,9 @@ body{
   background:var(--bg); color:var(--text);
   font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;
   font-weight:500; display:flex; justify-content:center; overflow:hidden;
-  /* iOS：ダブルタップ拡大・文字選択・長押しメニューを止める */
-  touch-action:none;
+  /* iOS：ダブルタップ拡大・文字選択・長押しメニューを止める。
+     ただし盤面以外では指の操作を殺しきらない（拡大から戻れなくなるため） */
+  touch-action:manipulation;
   -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
 }
 #wrap{
@@ -58,7 +59,8 @@ body{
 .chip .s b{ color:var(--text) }
 .chip .cost{ font-size:9px; color:var(--gold) }
 
-#stage{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; position:relative }
+#stage{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; position:relative;
+        touch-action:none }   /* 弾く操作を邪魔されないよう、盤面だけは指の動きを全部もらう */
 canvas{ display:block; border-radius:12px; border:1px solid var(--line); background:#0f0d0b }
 
 #info{
@@ -173,11 +175,23 @@ table.dt tr.none td{ color:#574e45 }
 #saveState b{ color:var(--gold) }
 #saveState.warn b{ color:var(--foe) }
 #ioRow{ display:flex; gap:8px; justify-content:center; padding-bottom:6px }
+/* 書き出しは「入力欄」にしない。
+   iOS は文字16px未満の入力欄をタップすると勝手に拡大し、
+   このゲームはピンチ操作を封じているので、戻せなくなる */
+#ioCode{
+  display:none; width:100%; background:var(--ink); color:var(--text);
+  border:1px solid var(--line); border-radius:9px; padding:8px;
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:12px; line-height:1.7;
+  white-space:pre-wrap; word-break:break-all;
+  -webkit-user-select:text; user-select:text;
+}
+#ioCode.show{ display:block }
 #ioText{
   display:none; width:100%; background:var(--ink); color:var(--text);
   border:1px solid var(--line); border-radius:9px; padding:8px;
-  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11px; line-height:1.6;
-  resize:none; -webkit-user-select:text; user-select:text;
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:16px;      /* ★16px未満にしないこと。iOS が勝手に拡大する */
+  line-height:1.5; resize:none; -webkit-user-select:text; user-select:text;
 }
 #ioText.show{ display:block }
 #ioMsg{ font-size:10.5px; color:var(--gold); text-align:center; padding:5px 0; min-height:6px }
@@ -243,7 +257,8 @@ table.dt tr.none td{ color:#574e45 }
       <button class="mini" id="ioOut">かきだす</button>
       <button class="mini" id="ioIn">よみこむ</button>
     </div>
-    <textarea id="ioText" rows="7" spellcheck="false" autocapitalize="off"
+    <div id="ioCode"></div>
+    <textarea id="ioText" rows="5" spellcheck="false" autocapitalize="off"
               autocorrect="off" placeholder="ここに はりつける"></textarea>
     <div id="ioMsg"></div>
     <button class="mini" id="ioAdd">この きろくを たす</button>
@@ -1080,24 +1095,28 @@ function goScreen(n){
   if (SCREENS[scr].id === 'scrSet')  renderSet();
 }
 const ioText = document.getElementById('ioText');
+const ioCode = document.getElementById('ioCode');
 const ioMsg  = document.getElementById('ioMsg');
 const ioAdd  = document.getElementById('ioAdd');
 
 document.getElementById('ioOut').addEventListener('click', () => {
-  ioText.classList.add('show'); ioAdd.classList.remove('show');
-  ioText.value = exportCode();
-  ioText.select();
-  ioMsg.textContent = 'コピーして、どこかに はっておいてください';
+  // 入力欄には入れない。触れると画面が拡大して戻せなくなる
+  ioText.classList.remove('show'); ioAdd.classList.remove('show');
+  const code = exportCode();
+  ioCode.textContent = code;
+  ioCode.classList.add('show');
+  ioMsg.textContent = '長おしで えらんで コピーできます';
   try {
-    navigator.clipboard.writeText(ioText.value)
+    navigator.clipboard.writeText(code)
       .then(() => { ioMsg.textContent = 'コピーしました'; })
       .catch(() => {});
   } catch (e) { /* コピーできない環境でも、文字は出ているので手で選べる */ }
 });
 
 document.getElementById('ioIn').addEventListener('click', () => {
+  ioCode.classList.remove('show');
   ioText.classList.add('show'); ioAdd.classList.add('show');
-  ioText.value = ''; ioText.focus();
+  ioText.value = '';           // ここで focus しない。拡大のきっかけになる
   ioMsg.textContent = 'かきだした 文字を はりつけて、下を おす';
 });
 
@@ -1107,6 +1126,7 @@ ioAdd.addEventListener('click', () => {
   mergeCode(g);
   save(); renderData();
   ioText.value = ''; ioText.classList.remove('show'); ioAdd.classList.remove('show');
+  ioCode.classList.remove('show');
   ioMsg.textContent = g.m.n + ' しあい ぶんを たしました';
 });
 
@@ -1346,7 +1366,13 @@ document.getElementById('start').addEventListener('click', () => {
 document.getElementById('reteam').addEventListener('click', openPick);
 
 document.getElementById('retry').addEventListener('click', () => { reset(); save(); });
-document.addEventListener('gesturestart', e => e.preventDefault());
+/* ピンチ操作を止めるのは盤面の上だけにする。
+   画面ぜんぶで止めると、何かの拍子に拡大された時に自力で戻せなくなる。
+   実際それで、書き出しを押した先生が閉じ込められた */
+document.addEventListener('gesturestart', e => {
+  const play = document.getElementById('scrPlay');
+  if (play && play.classList.contains('on') && play.contains(e.target)) e.preventDefault();
+}, { passive:false });
 addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);
 if (!document.querySelector('meta[name="viewport"]')) {
