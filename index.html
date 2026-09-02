@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 2.3.1</title>
+<title>はじきあい 2.4.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -248,7 +248,7 @@ a.mini{ text-decoration:none; text-align:center; line-height:1 }
     <div id="pick">
       <h3>つれていく <span>3たい</span> をえらぶ</h3>
       <div id="pickList"></div>
-      <div id="pickNote">あいては 🐲リュウ・👹オニ・🦂サソリ</div>
+      <div id="pickNote"></div>
       <div id="pickFoot"><button id="start" disabled>はじめる</button></div>
     </div>
 
@@ -354,7 +354,7 @@ const BAL = {
   stopAt:34,
   /* --- スキルは尖らせる。平均化すると、どれを選んでも同じになってしまう --- */
   rehit:0.2,           // 同じ相手に続けて当たるまでの待ち時間（秒）
-  chainStep:2, chainSpeed:1.22, chainRehit:0.2, chainTime:4, chainFric:0.80, chainKeep:0.55,
+  chainStep:2, chainSpeed:1.40, chainRehit:0.2, chainTime:4, chainFric:0.80, chainKeep:0.55,
   /* 連撃：オニの「壁で加速」に対する「敵で加速」。当てるたび速くなり、
      その間は摩擦が弱くて転がり続ける。加えて威力も段々伸びる。
      速度だけ上げても命中は増えなかった——止まらないことの方が効く */
@@ -405,7 +405,7 @@ const SKILLS = {
    「ライフの減る速さ」を2倍変えてしまい、選択がコストだけの勝負になったため。
    コマが増えたら「編成できる合計の上限」として復活させる予定 */
 const POOL = [
-  { id:'fox',  face:'🦊', name:'キツネ',   skill:'magnet', hp:10, atk:2, cost:2, shotCol:'#8fd7ff' },
+  { id:'fox',  face:'🦊', name:'キツネ',   skill:'magnet', hp:10, atk:3, cost:2, shotCol:'#8fd7ff' },
   { id:'wolf', face:'🐺', name:'オオカミ', skill:'chain',  hp:10, atk:2, cost:2, shotCol:'#ffe08a' },
   { id:'bear', face:'🐻', name:'クマ',     skill:'heavy',  hp:13, atk:4, cost:2, shotCol:'#ffab6b' },
   { id:'drgn', face:'🐲', name:'リュウ',   skill:'pierce', hp:7,  atk:5, cost:2, shotCol:'#c9a6ff' },
@@ -426,7 +426,7 @@ let unlocked = FREE.slice();
 let myPick = ['fox','wolf','bear'];      // いま選んでいる3体
 /* 相手は固定チーム。プレイヤーの選択で相手も変わると、
    「自分の損が減る」と「相手の損が増える」が同時に起きて選択が壊れる */
-const FOE_TEAM = ['drgn','oni','scrp'];
+const FOE_TEAM = ['fox','wolf','bear'];   // ボットに35通り戦わせて、いちばん勝率が高かった3体
 let roster = { me:[], foe:[] };
 
 /* ===== 状態 ===== */
@@ -1338,7 +1338,7 @@ function renderPick(){
   renderPickChips();
   document.getElementById('pickNote').innerHTML =
     '<b>あいての ライフを 0 に したら かち</b><br>' +
-    'あいては 🐲リュウ・👹オニ・🦂サソリ<br>' +
+    'あいては ' + FOE_TEAM.map(id => { const q = POOL.find(x => x.id === id); return q.face + q.name; }).join('・') + '<br>' +
     (hardOn ? '<b style="color:var(--foe)">むずかしいモード ON</b>　あいてのライフ ' + foeLifeMax() + '<br>' : '') +
     'せんせき <b>' + wins() + '</b>しょう <b>' + losses() + '</b>はい';
   document.getElementById('pickList').innerHTML = POOL
