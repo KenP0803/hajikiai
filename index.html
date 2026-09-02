@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 2.1.1</title>
+<title>はじきあい 2.1.2</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -114,6 +114,21 @@ canvas{ display:block; border-radius:12px; border:1px solid var(--line); backgro
 }
 
 /* ===== あそんだ記録 ===== */
+/* 横画面では遊べない作りなので、正直にそう出す。
+   iOS は向きを固定できないため、これが確実な手 */
+#rotate{
+  position:fixed; inset:0; z-index:20; display:none;
+  place-items:center; text-align:center; padding:24px;
+  background:var(--bg); color:var(--text);
+}
+#rotate .ic{ font-size:44px; line-height:1.4 }
+#rotate .t{ font-size:17px; font-weight:700; margin-top:6px }
+#rotate .d{ font-size:12px; color:var(--dim); margin-top:6px; line-height:1.6 }
+@media (orientation: landscape) and (max-height: 520px){
+  #rotate{ display:grid }
+  #wrap{ visibility:hidden }
+}
+
 /* ===== 画面の切り替え ===== */
 #nav{ display:flex; align-items:center; gap:6px; flex:0 0 auto }
 #navPrev, #navNext{
@@ -287,6 +302,12 @@ table.dt tr.none td{ color:#574e45 }
   </section>
 </div>
 
+
+<div id="rotate"><div>
+  <div class="ic">📱</div>
+  <div class="t">たてに してください</div>
+  <div class="d">この あそびは たて画面 むけに つくってあります</div>
+</div></div>
 
 <script>
 'use strict';
@@ -1330,8 +1351,9 @@ function renderData(){
   const pieceRows = POOL.map(p => {
     const v = stats[p.id];
     if (!v || !v.t) return '<tr class="none"><td class="nm">' + p.face + p.name +
-      '</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>';
+      '</td><td>0</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>';
     return '<tr><td class="nm">' + p.face + p.name + '</td>' +
+      '<td>' + v.t + '</td>' +
       '<td class="big">' + (v.d / v.t).toFixed(1) + '</td>' +
       '<td>' + pct(v.p, tot) + '</td>' +
       '<td>' + pct(v.z, v.t) + '</td>' +
@@ -1359,8 +1381,9 @@ function renderData(){
       '<th>かった時の<br>のこり</th><th>まけた時の<br>あいての のこり</th></tr>' +
       modeRows + '</table>' : '') +
     '<div class="dcap">コマ（ふつうと むずかしいを あわせて）</div><table class="dt">' +
-      '<tr><th>コマ</th><th>1かいの<br>ダメージ</th><th>つかった<br>わりあい</th>' +
-      '<th>から<br>ぶり</th><th>たおした<br>／やられた</th></tr>' + pieceRows + '</table>' +
+      '<tr><th>コマ</th><th>はじいた<br>かいすう</th><th>1かいの<br>ダメージ</th>' +
+      '<th>つかった<br>わりあい</th><th>から<br>ぶり</th><th>たおした<br>／やられた</th></tr>' +
+      pieceRows + '</table>' +
     (compRows ? '<div class="dcap">へんせい</div><table class="dt">' +
       '<tr><th>3たい</th><th>しあい</th><th>しょうりつ</th><th>かった時の<br>のこり</th></tr>' +
       compRows + '</table>' : '');
@@ -1482,12 +1505,17 @@ document.getElementById('start').addEventListener('click', () => {
 document.getElementById('reteam').addEventListener('click', openPick);
 
 document.getElementById('retry').addEventListener('click', () => { reset(); save(); });
-/* ピンチ操作を止めるのは盤面の上だけにする。
-   画面ぜんぶで止めると、何かの拍子に拡大された時に自力で戻せなくなる。
-   実際それで、書き出しを押した先生が閉じ込められた */
-document.addEventListener('gesturestart', e => {
-  const play = document.getElementById('scrPlay');
-  if (play && play.classList.contains('on') && play.contains(e.target)) e.preventDefault();
+/* 拡大は画面ぜんぶで止める。
+   一度「盤面の上だけ」にしたが、外を触ると拡大でき、
+   ホーム画面のアプリではアドレスバーも無いので戻せなくなった。
+   閉じ込めの元だった「入力欄の自動拡大」は消してあるので
+   （書き出しは入力欄ではない／読み込み欄は16px）、全部止めても閉じ込められない。
+   ★読み込み欄の文字を16px未満にしないこと。したら閉じ込めが復活する */
+['gesturestart','gesturechange','gestureend'].forEach(ev =>
+  document.addEventListener(ev, e => e.preventDefault(), { passive:false }));
+// 指2本の操作でも拡大する端末があるので、そちらも止める
+document.addEventListener('touchmove', e => {
+  if (e.touches && e.touches.length > 1) e.preventDefault();
 }, { passive:false });
 addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);
