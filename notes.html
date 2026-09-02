@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>はじきあい 変更のきろく</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#100e0d; --panel:#1c1815; --line:#332c26;
+  --text:#f0e7dd; --dim:#9b8b7c; --faint:#6b5f53;
+  --gold:#f7b733; --mine:#6ec4e0; --foe:#e0725d; --good:#9fe8b0;
+}
+*{ box-sizing:border-box }
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+  font-weight:500; line-height:1.8; padding:30px 16px 70px;
+}
+.wrap{ max-width:640px; margin:0 auto }
+
+.hd{ border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:8px }
+h1{ font-size:21px; font-weight:700; margin:0; letter-spacing:.02em }
+.sub{ font-size:12.5px; color:var(--dim); margin-top:6px }
+.sub a{ color:var(--gold) }
+
+.v{ padding:24px 0 4px; border-bottom:1px solid var(--line) }
+.v:last-child{ border-bottom:0 }
+.vt{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap }
+.num{
+  font-family:"Bungee","Noto Sans JP",sans-serif; font-size:19px; color:var(--gold);
+  font-variant-numeric:tabular-nums;
+}
+.vn{ font-size:14px; font-weight:700 }
+.tag{
+  font-size:10px; padding:2px 8px; border-radius:20px;
+  border:1px solid var(--line); color:var(--dim);
+}
+.tag.big{ color:#231a08; background:var(--gold); border-color:var(--gold); font-weight:700 }
+
+ul{ list-style:none; padding:0; margin:12px 0 0 }
+li{ position:relative; padding-left:18px; font-size:13.5px; margin-bottom:9px }
+li::before{ content:''; position:absolute; left:2px; top:11px; width:6px; height:6px;
+            border-radius:2px; background:var(--line) }
+li.add::before{ background:var(--good) }
+li.chg::before{ background:var(--gold) }
+li.fix::before{ background:var(--foe) }
+li b{ color:var(--text); font-weight:700 }
+li .why{ display:block; font-size:11.5px; color:var(--dim); margin-top:2px }
+
+.legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--dim); margin-top:14px }
+.legend span{ display:inline-flex; align-items:center; gap:6px }
+.legend i{ width:6px; height:6px; border-radius:2px; display:inline-block }
+
+.foot{ margin-top:34px; font-size:11.5px; color:var(--faint); line-height:1.9; text-align:center }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="hd">
+    <h1>はじきあい 変更のきろく</h1>
+    <div class="sub">
+      あそぶ → <a href="https://kenp0803.github.io/hajikiai/">kenp0803.github.io/hajikiai</a><br>
+      いまの版は <b>2.3.0</b>。せってい画面の一番下でも たしかめられます。
+    </div>
+    <div class="legend">
+      <span><i style="background:#9fe8b0"></i>ふえた</span>
+      <span><i style="background:#f7b733"></i>かわった</span>
+      <span><i style="background:#e0725d"></i>なおした</span>
+    </div>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">2.3.0</span><span class="vn">バランス調整</span><span class="tag big">いま</span></div>
+    <ul>
+      <li class="chg"><b>🦊キツネ たいりょく 7 → 10</b>
+        <span class="why">2人の記録で、唯一「たおすより たおされる方が多い」コマでした。磁力は敵の真ん中へ突っこむ技なのに、体力が最少タイだったので</span></li>
+      <li class="chg"><b>🐻クマ ちから 2 → 4</b>
+        <span class="why">火力が最下位でした。1ターンに1回しか当たらないのが正体なので、その1回を重くしました</span></li>
+      <li class="chg"><b>👹オニ たいりょく 10 → 13</b>
+        <span class="why">いちばん使われているのに、成績は真ん中だったので。※オニは あいてチームにもいます</span></li>
+      <li class="chg"><b>🐡フグ 外すたびに 威力が たまる（5 → 7 → 9 → 11）</b>
+        <span class="why">当てると 5 に戻ります。伸びしろが無いのが弱さの正体でした。いまの威力は 円の上に出ています</span></li>
+      <li class="fix">🐲リュウは <b>そのまま</b>
+        <span class="why">火力は突出していますが、弱いコマを上げる方を先にしました</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">2.2.0</span><span class="vn">たおれたコマの もどり方</span></div>
+    <ul>
+      <li class="chg"><b>たおれたコマは、つぎのターンで かならず もどる</b>
+        <span class="why">まえは「じぶんのチームの ばんが来た時」だったので、相手のばんのあいだ 盤から消えていました。1ターン まるごと消えるのは長い、という声から</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">2.1.2</span><span class="vn">さわり心地</span></div>
+    <ul>
+      <li class="fix"><b>盤面の外を さわると拡大されて、もどせなくなる</b> のを直した
+        <span class="why">ホーム画面に追加したアプリで起きていました</span></li>
+      <li class="add">横向きにすると <b>「たてに してください」</b> と出る
+        <span class="why">よこ画面むけには作っていないので</span></li>
+      <li class="add">きろくの表に <b>「はじいた かいすう」</b> を戻した
+        <span class="why">その数字を信じてよいか、これで分かります</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">2.1.0</span><span class="vn">きろくの 作り直し</span></div>
+    <ul>
+      <li class="chg"><b>しょうりつと のこりライフは モードべつ</b>、
+        <b>つかったわりあいと ダメージは まとめて</b>
+        <span class="why">ふつうと むずかしいを 混ぜると、どちらの実感とも合わない数字になるため</span></li>
+      <li class="add"><b>へんせいごとの成績</b>
+        <span class="why">どの3たいが、どれだけ余裕をもって勝っているか</span></li>
+      <li class="add"><b>まけた時の「あいての のこり」</b>
+        <span class="why">おしい負けか、手も足も出なかったかが分かります</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.8 – 1.9</span><span class="vn">きろくを 失わないように</span></div>
+    <ul>
+      <li class="fix"><b>ブラウザを とじると 戦績が消える</b> のを直した</li>
+      <li class="add"><b>きろくの かきだす／よみこむ</b>
+        <span class="why">文字にして持ち出せます。よみこむは「足し算」なので、2人ぶんを合わせられます</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.6 – 1.7</span><span class="vn">画面と 盤面</span></div>
+    <ul>
+      <li class="add">上の <b>◀ ▶</b> で <b>たいせん / きろく / せってい</b> を行き来する</li>
+      <li class="chg"><b>棘は 最初は無く、3ターンごとに 1〜2こ ずつ 湧く</b>
+        <span class="why">最初から置くと、あそびかたの案内と重なって盤面が読めませんでした</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.5</span><span class="vn">きろく</span></div>
+    <ul>
+      <li class="add">コマごとの <b>1回のダメージ・つかったわりあい・たおした／やられた</b> を数えるように
+        <span class="why">バランス調整を、感覚ではなく数字でやるため</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.2 – 1.4</span><span class="vn">🐡フグ 参戦</span><span class="tag big">新コマ</span></div>
+    <ul>
+      <li class="add"><b>🐡フグ（衝撃波）</b> を追加
+        <span class="why">「ロマン砲が欲しい」という声から</span></li>
+      <li class="chg"><b>自分のばんの おわりに、いる場所で 毎回ばくはつ する</b>
+        <span class="why">当てに行く技ではなく、良い場所へ運ぶ技。この遊びで唯一「置く」コマです</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.3</span><span class="vn">連撃と 加速</span></div>
+    <ul>
+      <li class="chg"><b>🐺オオカミの連撃を「敵で加速」に</b>
+        <span class="why">👹オニの「壁で加速」と対になりました。連撃はずっと最下位だったので</span></li>
+      <li class="fix"><b>正面から当たると その場で止まってしまう</b> のを直した
+        <span class="why">「止まる時と止まらない時の差が激しい」という声から。同じ重さの玉は、正面衝突で速度をほぼ全部わたしてしまうためでした</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.1</span><span class="vn">むずかしいモード</span></div>
+    <ul>
+      <li class="add"><b>あいてのライフが 21 → 31 に</b>
+        <span class="why">せってい画面で 切りかえられます</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">1.0</span><span class="vn">さいしょの かたち</span></div>
+    <ul>
+      <li class="add">6たいから 3たいを えらんで、あいてのライフを 0 にしたら かち</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    <a href="./" style="color:var(--gold)">← あそびに もどる</a><br><br>
+    きろくは この端末の中だけに たまります。<br>
+    ホーム画面に追加したアプリと、ブラウザで開いたページは 別あつかいです。
+  </div>
+</div>
+
+</body>
+</html>
