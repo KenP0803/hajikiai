@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 2.2.0</title>
+<title>はじきあい 2.3.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -351,7 +351,10 @@ const BAL = {
   /* 連撃：オニの「壁で加速」に対する「敵で加速」。当てるたび速くなり、
      その間は摩擦が弱くて転がり続ける。加えて威力も段々伸びる。
      速度だけ上げても命中は増えなかった——止まらないことの方が効く */
-  heavyPush:2.0, heavyKeep:0.05,   // 重撃：自分は止まり、相手を大きく吹き飛ばす
+  heavyPush:2.0, heavyKeep:0.05,
+  /* 重撃：自分は止まり、相手を大きく吹き飛ばす。
+     1ターンに1回しか当たらないのが弱さだったので、攻撃力そのものを 2→4 にした。
+     「壁に叩きつけたら2発目」も試したが、2つ重ねると最強格になったので外した */
   magnetPull:900, magnetTime:3.0, magnetBonus:0,   // 磁力：吸い付いて離れない
   pierceSlow:1.0,      // 貫通：減速せず貫き通す
   accelWall:1.22, accelMax:1900, accelTime:4, accelFric:0.80, accelKeep:0.55,
@@ -359,7 +362,10 @@ const BAL = {
      効果時間だけ伸ばしても、摩擦で失速して壁に2回も当たれなかったため */
   maxFlyT:12,          // 保険。どんなスキルでもこの秒数で必ず止める
   ricoKeep:1.0,        // 跳弾：勢いを落とさず次々に跳ぶ
-  blastR:120, blastDmg:5,
+  blastR:120, blastDmg:5, blastStep:2, blastMax:11,
+  /* 衝撃波：不発だった回数ぶん威力が溜まる（5→7→9→11で頭打ち）。
+     当てた瞬間に全部放出して、5に戻る。
+     伸びしろが無いのが弱さの正体だった。外した回が次に効く形にした */
   /* 衝撃波：自分の番が終わるたび、フグを中心にこの半径の中の相手全員へ。
      弾いたコマでなくても効く＝「当てる」技ではなく「良い場所に置く」技。
      毎ターン効くので、1回あたりの威力は他より軽い */
@@ -379,12 +385,12 @@ const BAL = {
 /* ===== スキル。そのコマを弾く時に自動で乗る ===== */
 const SKILLS = {
   chain:  { name:'連撃', desc:'敵に当たるたび速くなる。威力も伸びる' },
-  heavy:  { name:'重撃', desc:'その場で止まり、相手を大きく吹き飛ばす' },
+  heavy:  { name:'重撃', desc:'その場で止まり、相手を大きく吹き飛ばす。1発が重い' },
   magnet: { name:'磁力', desc:'吸い付いて何度も当たる。1発は軽い' },
   pierce: { name:'貫通', desc:'減速せず貫く。1発がとても重い' },
   accel:  { name:'加速', desc:'壁に当たるたび速くなる。しばらく止まらない' },
   ricochet:{ name:'跳弾', desc:'勢いを落とさず次々に跳ぶ' },
-  blast:  { name:'衝撃波', desc:'自分の番の終わりに、いる場所で毎回爆発する' }
+  blast:  { name:'衝撃波', desc:'自分の番の終わりに毎回爆発。外すほど 次が重い' }
 };
 
 /* コマの性能。6体の共通プールから3体を選ぶ。
@@ -392,11 +398,11 @@ const SKILLS = {
    「ライフの減る速さ」を2倍変えてしまい、選択がコストだけの勝負になったため。
    コマが増えたら「編成できる合計の上限」として復活させる予定 */
 const POOL = [
-  { id:'fox',  face:'🦊', name:'キツネ',   skill:'magnet', hp:7,  atk:2, cost:2, shotCol:'#8fd7ff' },
+  { id:'fox',  face:'🦊', name:'キツネ',   skill:'magnet', hp:10, atk:2, cost:2, shotCol:'#8fd7ff' },
   { id:'wolf', face:'🐺', name:'オオカミ', skill:'chain',  hp:10, atk:2, cost:2, shotCol:'#ffe08a' },
-  { id:'bear', face:'🐻', name:'クマ',     skill:'heavy',  hp:13, atk:2, cost:2, shotCol:'#ffab6b' },
+  { id:'bear', face:'🐻', name:'クマ',     skill:'heavy',  hp:13, atk:4, cost:2, shotCol:'#ffab6b' },
   { id:'drgn', face:'🐲', name:'リュウ',   skill:'pierce', hp:7,  atk:5, cost:2, shotCol:'#c9a6ff' },
-  { id:'oni',  face:'👹', name:'オニ',     skill:'accel',  hp:10, atk:3, cost:2, shotCol:'#ff9b8a' },
+  { id:'oni',  face:'👹', name:'オニ',     skill:'accel',  hp:13, atk:3, cost:2, shotCol:'#ff9b8a' },
   { id:'scrp', face:'🦂', name:'サソリ',   skill:'ricochet', hp:13, atk:3, cost:2, shotCol:'#9fe8b0' },
   { id:'puff', face:'🐡', name:'フグ',     skill:'blast',  hp:13, atk:1, cost:2, shotCol:'#ffd166' }
 ];
@@ -584,7 +590,7 @@ function mk(p, team, i){
   const hx = AW/2 + (i-(n-1)/2) * 100;
   const hy = team === 'me' ? AH-80 : 80;
   return { ...p, team, i, hx, hy, x:hx, y:hy,
-           vx:0, vy:0, cur:p.hp, alive:true, lastHit:0 };
+           vx:0, vy:0, cur:p.hp, alive:true, lastHit:0, chg:0 };
 }
 
 /* ターンの順番は生死に関係なく固定。倒れているコマは、その番が来た時に戻ってくる */
@@ -831,6 +837,10 @@ function knockOut(p, src){
   if (life[p.team] <= 0) { life[p.team] = 0; finish(p.team === 'foe'); }
 }
 
+/* 衝撃波のいまの威力。不発のたびに上がり、当てると 5 に戻る */
+const chgMax = () => Math.floor((BAL.blastMax - BAL.blastDmg) / BAL.blastStep);
+const blastDmg = p => Math.min(BAL.blastMax, BAL.blastDmg + BAL.blastStep * (p.chg || 0));
+
 /* ===== ターン ===== */
 function endTurn(){
   pieces.forEach(p => { p.vx = p.vy = 0; });
@@ -843,14 +853,17 @@ function endTurn(){
   for (const b of pieces.filter(p => p.team === turnTeam && p.alive && p.skill === 'blast')) {
     const caught = pieces.filter(p => p.alive && p.team !== b.team
                                  && Math.hypot(p.x-b.x, p.y-b.y) < BAL.blastR);
-    fx.push({ k:'wave', x:b.x, y:b.y, t:0, hit:caught.length > 0, n:caught.length });
+    const bd = blastDmg(b);
+    fx.push({ k:'wave', x:b.x, y:b.y, t:0, hit:caught.length > 0, n:caught.length, dmg:bd });
+    if (!caught.length) { b.chg = Math.min(b.chg + 1, chgMax()); continue; }   // 不発ぶんが溜まる
+    b.chg = 0;                                                                 // 当てたら放出
     for (const t of caught) {
       hitsThisTurn++;
-      damage(t, BAL.blastDmg, 'hit', b);
-      dmgThisTurn += BAL.blastDmg;
+      damage(t, bd, 'hit', b);
+      dmgThisTurn += bd;
       if (over) return;
     }
-    if (caught.length) { comboT = 0; shake = 9; }
+    comboT = 0; shake = 9;
   }
 
   if (turnTeam === 'me' && active && st(active.id).d === turnStartD) st(active.id).z++;
@@ -1006,8 +1019,18 @@ function draw(){
     ctx.save(); ctx.setLineDash([5,7]); ctx.lineWidth = 1.5;
     for (const p of pieces) {
       if (!p.alive || p.skill !== 'blast') continue;
-      ctx.strokeStyle = (p === active) ? 'rgba(247,183,51,.55)' : 'rgba(247,183,51,.24)';
+      const chg = (p.chg || 0) > 0;
+      ctx.strokeStyle = chg ? 'rgba(255,155,138,' + (0.45 + p.chg*0.15) + ')'
+                            : (p === active) ? 'rgba(247,183,51,.55)' : 'rgba(247,183,51,.24)';
+      ctx.lineWidth = chg ? 1.5 + p.chg*0.6 : 1.5;
       ctx.beginPath(); ctx.arc(p.x, p.y, BAL.blastR, 0, 7); ctx.stroke();
+      // 溜まっている威力を数字で出す。見えない強さは無いのと同じ
+      ctx.setLineDash([]);
+      ctx.fillStyle = chg ? '#ff9b8a' : 'rgba(247,183,51,.7)';
+      ctx.font = 'bold 12px "Bungee", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(blastDmg(p), p.x, p.y - BAL.blastR + 9);
+      ctx.setLineDash([5,7]);
     }
     ctx.restore();
   }
