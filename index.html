@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 2.1.2</title>
+<title>はじきあい 2.2.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -880,8 +880,13 @@ function nextTurn(){
   if (over) return;
   turnTeam = turnTeam === 'me' ? 'foe' : 'me';
   ptr[turnTeam] = (ptr[turnTeam] + 1) % roster[turnTeam].length;
-  // 自分のチームの番が来たら、倒れている味方は全員まとめて戻ってくる
-  pieces.filter(p => p.team === turnTeam && !p.alive).forEach(revive);
+  /* 倒れたコマは、次のターンが始まる時に必ず戻る。両チームとも。
+     以前は「自分のチームの番が来た時」だったので、自分の番で倒れると
+     相手の番のあいだ盤上から消えていた。友人はそれを不具合だと思った——
+     たしかに1ターン丸ごと消えるのは長い。
+     ★「相手の番で戻る」だけにしてはいけない。相手の番に倒されたコマが
+       自分の番に戻らず、動かせないコマで手番が来て詰む */
+  pieces.filter(p => !p.alive).forEach(revive);
   active = cur();
   hitsThisTurn = 0;
   // 3ターンごとに棘がふえる。最初のひと湧きは3ターン目なので、案内とは重ならない
