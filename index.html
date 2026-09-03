@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 3.0.0</title>
+<title>はじきあい 3.0.1</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -1230,6 +1230,7 @@ document.getElementById('ioOut').addEventListener('click', () => {
       .then(() => { ioMsg.textContent = 'コピーしました'; })
       .catch(() => {});
   } catch (e) { /* コピーできない環境でも、文字は出ているので手で選べる */ }
+  ioReset();
 });
 
 document.getElementById('ioIn').addEventListener('click', () => {
@@ -1237,16 +1238,37 @@ document.getElementById('ioIn').addEventListener('click', () => {
   ioText.classList.add('show'); ioAdd.classList.add('show');
   ioText.value = '';           // ここで focus しない。拡大のきっかけになる
   ioMsg.textContent = 'かきだした 文字を はりつけて、下を おす';
+  ioReset();
 });
+
+/* 版やシーズンが違う記録は、一度ことわってから足す。
+   ★断り切ってはいけない——2人ぶんを合わせたい事情は、こちらには分からない。
+     ただし黙って混ぜてもいけない。混ざった数字は「混ざった」と気づけないまま、
+     次のバランス調整の根拠になってしまう */
+let ioPend = null;
+function ioReset(){ ioPend = null; ioAdd.textContent = 'この きろくを たす'; }
 
 ioAdd.addEventListener('click', () => {
   const g = parseCode(ioText.value);
-  if (!g) { ioMsg.textContent = '読めませんでした。かきだした 文字を そのまま はってください'; return; }
+  if (!g) {
+    ioMsg.textContent = '読めませんでした。かきだした 文字を そのまま はってください';
+    ioReset(); return;
+  }
+  const there = verLabel(g.ver, g.season), here = verLabel(GAME_VER, SEASON);
+  if (there !== here && ioPend !== there) {
+    ioPend = there;
+    ioAdd.textContent = 'それでも たす';
+    ioMsg.innerHTML = '<b style="color:var(--foe)">ちがう版の きろくです</b><br>' +
+      'この文字：' + there + '<br>いまの版：' + here + '<br>' +
+      'たすと 数字が まざります。よければ もう一度 おしてください';
+    return;
+  }
   mergeCode(g);
   save(); renderData();
   ioText.value = ''; ioText.classList.remove('show'); ioAdd.classList.remove('show');
   ioCode.classList.remove('show');
   ioMsg.textContent = (g.m.n.n + g.m.h.n) + ' しあい ぶんを たしました';
+  ioReset();
 });
 
 document.getElementById('navPrev').addEventListener('click', () => goScreen(scr - 1));
@@ -1459,10 +1481,14 @@ function renderData(){
    このページは別サイトの枠の中でも動くので、ブラウザによっては
    閉じた時に保存が消える。消えても困らないよう、文字にして持ち出せるようにする。
    人が読める形にしてあるので、写真に撮っても中身が分かる */
-const IO_HEAD = 'HAJIKI2';   // 形を変えたら必ず上げる。古い形を黙って読むと数字が混ざる
+const IO_HEAD  = 'HAJIKI2';   // 形を変えたら必ず上げる。古い形を黙って読むと数字が混ざる
+const GAME_VER = '3.0.1';     // ★<title> と そろえる（check.js が見張っている）
+const SEASON   = 's1';        // 強化を入れるたびに数える。「まぜてよい記録」の単位
+const verLabel = (v, s) =>
+  (v || '3.0.0 より前') + '／' + (s ? 'シーズン' + s.slice(1) : 'シーズン なし');
 
 function exportCode(){
-  const O = [IO_HEAD];
+  const O = [IO_HEAD + ' ' + GAME_VER + ' ' + SEASON];
   const md = (tag, m) => { if (m.n) O.push('M ' + tag + ' ' + m.n + ' ' + m.w + ' ' + m.tn + ' ' + m.mw + ' ' + m.ml); };
   md('n', mstat.n); md('h', mstat.h);
   for (const p of POOL) {
@@ -1479,10 +1505,14 @@ function exportCode(){
 /* 読めなければ null。壊れた文字列で今の記録を壊さない */
 function parseCode(txt){
   const lines = String(txt).trim().split(/[\r\n]+/).map(x => x.trim()).filter(Boolean);
-  if (!lines.length || lines[0] !== IO_HEAD) return null;
+  if (!lines.length) return null;
+  const head = lines[0].split(/\s+/);
+  if (head[0] !== IO_HEAD) return null;
   const num = x => { const n = Number(x); return Number.isFinite(n) && n >= 0 ? n : null; };
   const nums = (a, k) => { const v = a.map(num); return v.length === k && !v.some(x => x === null) ? v : null; };
-  const out = { m:{ n:newMode(), h:newMode() }, s:{}, c:{} };
+  // 版とシーズンは無くてもよい（3.0.0 までの文字には入っていない）
+  const out = { ver:head[1] || null, season:head[2] || null,
+                m:{ n:newMode(), h:newMode() }, s:{}, c:{} };
   const ids = POOL.map(p => p.id);
   for (const line of lines.slice(1)) {
     const c = line.split(/\s+/);
