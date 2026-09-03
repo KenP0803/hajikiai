@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 3.0.1</title>
+<title>はじきあい 3.1.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -70,6 +70,73 @@ canvas{ display:block; border-radius:12px; border:1px solid var(--line); backgro
 #info .who{ font-size:13.5px; font-weight:700 }
 #info .sk{ font-size:11px; color:var(--dim); margin-top:2px }
 #info .sk b{ color:var(--gold) }
+
+/* ===== れんしゅう（ミニゲーム） =====
+   対戦の上に丸ごとかぶせる。対戦の画面構成には手を入れない */
+#train{
+  position:fixed; inset:0; z-index:40; display:none;
+  background:var(--bg); flex-direction:column; gap:8px;
+  padding:max(8px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+  max-width:440px; margin:0 auto;
+}
+#train.show{ display:flex }
+#trHead{ display:flex; align-items:center; gap:8px; flex:0 0 auto }
+#trHead .t{ flex:1; font-size:13.5px; font-weight:700; text-align:center }
+#trBack{
+  width:34px; height:34px; border-radius:10px; flex:0 0 auto;
+  background:var(--panel); border:1px solid var(--line); color:var(--text);
+  font-size:15px; font-family:inherit; cursor:pointer;
+}
+#trSel, #trRun{ flex:1 1 auto; min-height:0; display:none; flex-direction:column; gap:10px }
+#train.sel #trSel{ display:flex }
+#train.run #trRun{ display:flex }
+
+#trRow{ display:flex; align-items:center; gap:8px; flex:1 1 auto; min-height:0 }
+#trPrev, #trNext{
+  width:40px; height:52px; border-radius:12px; flex:0 0 auto;
+  background:var(--panel); border:1px solid var(--line); color:var(--gold);
+  font-size:16px; font-family:inherit; cursor:pointer;
+}
+#trCard{
+  flex:1; background:var(--panel); border:1px solid var(--line); border-radius:14px;
+  padding:18px 14px; text-align:center; align-self:stretch;
+  display:flex; flex-direction:column; justify-content:center; gap:6px; overflow-y:auto;
+}
+#trCard.soon{ opacity:.45 }
+#trCard .f{ font-size:44px; line-height:1 }
+#trCard .n{ font-size:17px; font-weight:700 }
+#trCard .l{ font-size:11.5px; color:var(--gold) }
+#trCard .d{ font-size:12px; color:var(--dim); line-height:1.75; margin-top:4px }
+#trCard .d b{ color:var(--text) }
+#trBest{ margin-top:8px; font-size:10px; color:var(--dim); letter-spacing:.14em }
+#trBest .num{ font-size:20px; color:var(--gold); display:block; letter-spacing:0 }
+#trDots{ display:flex; gap:6px; justify-content:center; flex:0 0 auto }
+#trDots span{ width:6px; height:6px; border-radius:50%; background:var(--line) }
+#trDots span.on{ background:var(--gold) }
+#trGo{
+  flex:0 0 auto; padding:14px; border:none; border-radius:12px;
+  background:var(--gold); color:#231a08; font-size:15px; font-weight:700;
+  font-family:inherit; cursor:pointer;
+}
+#trGo:disabled{ background:var(--panel); color:#6b5f53; border:1px solid var(--line) }
+
+#trBar{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:6px 12px;
+}
+#trBar .k{ font-size:10px; color:var(--dim); letter-spacing:.1em }
+#trBar .v{ font-size:17px; color:var(--gold) }
+#trBar .sp{ flex:1 }
+#trStage{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0;
+          position:relative; touch-action:none }
+#trMsg{ flex:0 0 auto; text-align:center; font-size:12px; color:var(--dim); min-height:34px; line-height:1.6 }
+#trMsg b{ color:var(--gold) }
+#trAgain{
+  flex:0 0 auto; padding:12px; border-radius:12px; font-family:inherit; font-size:14px;
+  font-weight:700; cursor:pointer; background:var(--panel); color:var(--text);
+  border:1px solid var(--line); display:none;
+}
+#trAgain.show{ display:block }
 
 /* ===== 編成画面 ===== */
 #pick{
@@ -295,6 +362,11 @@ a.mini{ text-decoration:none; text-align:center; line-height:1 }
       <button class="mini" id="guideBtn">出す</button>
     </div>
     <div class="set">
+      <div><div class="t">れんしゅう</div>
+        <div class="d">コマの技を ひとりで ためす ミニゲーム。<b>対戦の きろくには 入りません</b></div></div>
+      <button class="mini" id="trainBtn">ひらく</button>
+    </div>
+    <div class="set">
       <div><div class="t">ギブアップ</div>
         <div class="d">いまの しあいを あきらめる。<b style="color:var(--foe)">まけ</b> として きろくに のこります</div></div>
       <button class="mini" id="giveBtn">まける</button>
@@ -307,13 +379,48 @@ a.mini{ text-decoration:none; text-align:center; line-height:1 }
     </div>
     <div class="set">
       <div><div class="t">きろくを けす</div>
-        <div class="d">せんせき・あそんだ きろくが 全部 消える</div></div>
+        <div class="d">せんせき・あそんだ きろくが 全部 消える。<b>れんしゅうの さいこう記録は のこります</b></div></div>
       <button class="mini danger" id="wipeBtn">けす</button>
     </div>
     <div id="setVer"></div>
   </section>
 </div>
 
+
+<div id="train">
+  <div id="trHead">
+    <button id="trBack" aria-label="もどる">✕</button>
+    <div class="t" id="trHeadName">れんしゅう</div>
+    <div style="width:34px;flex:0 0 auto"></div>
+  </div>
+
+  <div id="trSel">
+    <div id="trRow">
+      <button id="trPrev" aria-label="ひとつ前">◀</button>
+      <div id="trCard">
+        <div class="f" id="trFace"></div>
+        <div class="n" id="trName"></div>
+        <div class="l" id="trLine"></div>
+        <div class="d" id="trDesc"></div>
+        <div id="trBest"></div>
+      </div>
+      <button id="trNext" aria-label="つぎ">▶</button>
+    </div>
+    <div id="trDots"></div>
+    <button id="trGo">きめる</button>
+  </div>
+
+  <div id="trRun">
+    <div id="trBar">
+      <span class="k">なげた</span><span class="v num" id="trShot">0/3</span>
+      <span class="sp"></span>
+      <span class="k">とくてん</span><span class="v num" id="trScore">0</span>
+    </div>
+    <div id="trStage"><canvas id="cvT"></canvas></div>
+    <div id="trMsg"></div>
+    <button id="trAgain">もう一度</button>
+  </div>
+</div>
 
 <div id="rotate"><div>
   <div class="ic">📱</div>
@@ -452,6 +559,7 @@ const losses = () => (mstat.n.n - mstat.n.w) + (mstat.h.n - mstat.h.w);
 let stats = {};    // コマのid -> { t はじいた, d ダメージ, z 空振り, ko 倒した, dd やられた, p 編成に入れた }
 let comps = {};    // 'n|bear+fox+wolf' -> { n 試合, w 勝ち, mw 勝った時の自分の残りライフ合計 }
 const newMode = () => ({ n:0, w:0, tn:0, mw:0, ml:0 });
+let hs = {};       // ミニゲームの最高点。id -> 点。★足すだけ、下げない
 let mstat = { n:newMode(), h:newMode(), since:0 };   // n=ふつう h=むずかしい
 const st = id => (stats[id] = stats[id] || { t:0, d:0, z:0, ko:0, dd:0, p:0 });
 const cmpKey = () => (hardOn ? 'h|' : 'n|') + myPick.slice().sort().join('+');
@@ -494,7 +602,7 @@ const SAVE_VER = 2;
 /* ★保存する形を知っているのは、この2つだけ。
    あちこちで組み立てていると、項目を足した時に片方だけ直し忘れる */
 function serialize(){
-  const d = { v:SAVE_VER, pick:myPick, unlocked, hardOn, stats, mstat, comps };
+  const d = { v:SAVE_VER, pick:myPick, unlocked, hardOn, stats, mstat, comps, hs };
   // 途中の試合も残す。ただし「編成中でなく、玉が止まっていて操作待ち」の時だけ。
   // 編成中も保存すると、リロード時に始めていない試合が再開されてしまう
   if (!picking && !over && phase === 'aim' && pieces && pieces.length) {
@@ -523,6 +631,13 @@ function applySaved(d){
     if (d.stats && typeof d.stats === 'object') stats = d.stats;
     if (d.comps && typeof d.comps === 'object') comps = d.comps;
   }
+  // ミニゲームの最高点は「高い方だけ」入れる。上書きにすると、
+  // 別のタブの古い画面が閉じただけで記録が下がる
+  if (d.hs && typeof d.hs === 'object')
+    for (const k in d.hs) {
+      const v = Number(d.hs[k]);
+      if (Number.isFinite(v) && v > (hs[k] || 0)) hs[k] = v;
+    }
   hardOn = !!d.hardOn;
 }
 
@@ -1312,6 +1427,9 @@ document.getElementById('guideBtn').addEventListener('click', () => {
   guide = true; goScreen(0);
 });
 document.getElementById('wipeBtn').addEventListener('click', () => {
+  /* ★れんしゅうの最高点は消さない。
+     この button はシーズンの切り替えで押してもらうもの。
+     ミニゲームはシーズンの外にあるので、道連れにしてはいけない */
   clearSave();
   stats = {}; comps = {}; mstat = { n:newMode(), h:newMode(), since:0 };
   myPick = ['fox','wolf','bear'];
@@ -1342,9 +1460,282 @@ function loop(now){
   fx = fx.filter(f => f.t < (f.k === 'pop' ? 0.6 : f.k === 'shot' ? 0.42 : f.k === 'spark' ? 0.3 : f.k === 'sum' ? 1.3 : f.k === 'wave' ? 0.55 : 0.45));
   if (hadShots && !fx.some(f => f.k === 'shot') && phase === 'aim' && !over) nextTurn();
 
+  // れんしゅうは対戦とは別に回す。開いている間だけ動く
+  if (tRun) {
+    if (tRun.phase === 'fly') tPhys(dt);
+    for (const f of tRun.fx) f.t += dt;
+    tRun.fx = tRun.fx.filter(f => f.t < 0.55);
+    tDraw();
+  }
+
   if (playing) draw();
   requestAnimationFrame(loop);
 }
+
+/* ===== れんしゅう（ミニゲーム） =====
+   ★ここで出た数字を、対戦のきろくに入れてはいけない。
+     勝率・使用率・1回のダメージに混ざったら、シーズンの数字が最初から壊れる。
+     持ち帰るのは「最高点」だけ。
+   ★物理はここに別に持っている。対戦側の physics() は
+     ダメージ・ターン・戦績と絡み合っていて、練習から呼ぶと必ず壊す。
+     共有するのは BAL の数（大きさ・摩擦・力）だけにして、動かし方は分ける。
+     数が1か所なら、対戦の手ざわりを直した時に練習も一緒に直る */
+
+const GAMES = [
+  { id:'curl', face:'🐡', name:'フグのカーリング', line:'ど真ん中で 止まれ',
+    desc:'3投。<b>止まった場所</b>が 的の 中心に近いほど 高とくてん。ど真ん中は <b>100てん</b>。' +
+         '<br>止まった時の ばくはつに じゃま石を 巻きこむと <b>+10</b>。' +
+         '<br>フグは「当てる」技ではなく <b>「置く」技</b>です',
+    ready:true },
+  { id:'oni', face:'👹', name:'オニのつうろ', line:'壁を刻むほど 速くなる',
+    desc:'せまい通路を どこまで 進めるか。<br>まっすぐ上に撃つと 壁に当たらず 失速します',
+    ready:false }
+];
+
+const TW = 360, TH = 540;                          // 対戦と同じ広さ
+const HX = 180, HY = 130;                          // 的の中心
+const RING = [[24,100],[52,50],[86,20],[124,10]];  // 内側から。半径と点数
+const GUARD = [[180,300],[118,258],[242,258]];
+/* じゃま石は毎回おなじ場所に置く。
+   ランダムにすると最高点が運で決まって、練習にならない。
+   ★総当りで測ったところ、いちばん良い線は「まっすぐ・つよさ700」で3投230点。
+     ただし角度が1度ずれると130点、2度で90点まで落ちる。
+     指のブレ（±3度・±5%）を入れると へいきん78点、200点超えは0.3%。
+     覚えるだけでは届かず、毎回きちんと引く必要がある——この細さを崩さないこと */
+const TSTART = [180, 470];
+const TSHOTS = 3;
+
+let tIdx = 0;      // えらんでいるミニゲーム
+let tRun = null;   // 遊んでいる最中の状態。null なら選んでいる最中
+
+const cvT = document.getElementById('cvT');
+const tctx = cvT.getContext('2d');
+let tscale = 1;
+
+function tFit(){
+  const box = document.getElementById('trStage').getBoundingClientRect();
+  if (!box.width || !box.height) return;
+  const s = Math.min(box.width/TW, box.height/TH);
+  cvT.style.width = (TW*s)+'px'; cvT.style.height = (TH*s)+'px';
+  const dpr = Math.min(devicePixelRatio||1, 2);
+  cvT.width = Math.round(TW*s*dpr); cvT.height = Math.round(TH*s*dpr);
+  tscale = s*dpr;
+}
+addEventListener('resize', () => { if (tRun) tFit(); });
+
+/* ---- えらぶところ ---- */
+function renderTrain(){
+  const g = GAMES[tIdx];
+  document.getElementById('trFace').textContent = g.face;
+  document.getElementById('trName').textContent = g.name;
+  document.getElementById('trLine').textContent = g.line;
+  document.getElementById('trDesc').innerHTML = g.ready ? g.desc : 'まだ できていません';
+  document.getElementById('trCard').classList.toggle('soon', !g.ready);
+  document.getElementById('trBest').innerHTML = g.ready
+    ? 'HIGH SCORE<span class="num">' + (hs[g.id] || 0) + '</span>' : '';
+  document.getElementById('trDots').innerHTML =
+    GAMES.map((_, k) => '<span class="' + (k === tIdx ? 'on' : '') + '"></span>').join('');
+  const go = document.getElementById('trGo');
+  go.disabled = !g.ready;
+  go.textContent = g.ready ? 'きめる' : 'じゅんび中';
+}
+function trMove(d){ tIdx = (tIdx + d + GAMES.length) % GAMES.length; renderTrain(); }
+
+function openTrain(){
+  tRun = null;
+  const T = document.getElementById('train');
+  T.classList.add('show', 'sel'); T.classList.remove('run');
+  document.getElementById('trHeadName').textContent = 'れんしゅう';
+  renderTrain();
+}
+function closeTrain(){
+  tRun = null;
+  document.getElementById('train').classList.remove('show', 'sel', 'run');
+  renderSet();
+}
+
+/* ---- はじめる ---- */
+function trStart(){
+  const g = GAMES[tIdx]; if (!g.ready) return;
+  const T = document.getElementById('train');
+  T.classList.remove('sel'); T.classList.add('run');
+  document.getElementById('trHeadName').textContent = g.name;
+  tRun = { id:g.id, shot:0, score:0, phase:'aim', aim:null, fx:[],
+           stones:GUARD.map(g2 => ({ x:g2[0], y:g2[1], vx:0, vy:0, rock:true })),
+           puff:null, flyT:0 };
+  tNextShot();
+  tFit();
+}
+function tNextShot(){
+  const r = tRun;
+  r.shot++;
+  r.puff = { x:TSTART[0], y:TSTART[1], vx:0, vy:0, rock:false };
+  r.stones.push(r.puff);
+  r.phase = 'aim'; r.flyT = 0;
+  tBar();
+  tMsg(r.shot === 1
+    ? 'ひっぱって はなす。<b>つよさで 止まる場所が 決まります</b>'
+    : 'のこり ' + (TSHOTS - r.shot + 1) + '投');
+  document.getElementById('trAgain').classList.remove('show');
+}
+function tBar(){
+  document.getElementById('trShot').textContent = tRun.shot + '/' + TSHOTS;
+  document.getElementById('trScore').textContent = tRun.score;
+}
+function tMsg(h){ document.getElementById('trMsg').innerHTML = h; }
+
+/* ---- 物理。対戦とは別物だが、数は BAL から借りる ---- */
+function tPhys(dt){
+  const r = tRun;
+  let sp = 0; r.stones.forEach(p => { sp = Math.max(sp, Math.hypot(p.vx,p.vy)); });
+  const steps = Math.min(12, Math.max(1, Math.ceil(sp*dt/7)));
+  const h = dt/steps;
+  for (let k = 0; k < steps; k++) {
+    for (const p of r.stones) {
+      p.x += p.vx*h; p.y += p.vy*h;
+      if (p.x < BAL.r)    { p.x = BAL.r;    p.vx = -p.vx*BAL.wallBounce; }
+      if (p.x > TW-BAL.r) { p.x = TW-BAL.r; p.vx = -p.vx*BAL.wallBounce; }
+      if (p.y < BAL.r)    { p.y = BAL.r;    p.vy = -p.vy*BAL.wallBounce; }
+      if (p.y > TH-BAL.r) { p.y = TH-BAL.r; p.vy = -p.vy*BAL.wallBounce; }
+    }
+    // ぶつかり。同じ重さのはね返り。ダメージも順番も無い
+    const L = r.stones;
+    for (let a = 0; a < L.length; a++) for (let b = a+1; b < L.length; b++) {
+      const A = L[a], B = L[b];
+      const dx = B.x-A.x, dy = B.y-A.y, d = Math.hypot(dx,dy), min = BAL.r*2;
+      if (d >= min || d === 0) continue;
+      const nx = dx/d, ny = dy/d;
+      const vn = (A.vx-B.vx)*nx + (A.vy-B.vy)*ny;
+      const push = (min-d)/2 + 0.1;
+      A.x -= nx*push; A.y -= ny*push; B.x += nx*push; B.y += ny*push;
+      if (vn <= 0) continue;
+      const j = vn*BAL.ballBounce;
+      A.vx -= j*nx; A.vy -= j*ny; B.vx += j*nx; B.vy += j*ny;
+    }
+  }
+  r.flyT += dt;
+  const f = Math.pow(BAL.friction, dt);
+  r.stones.forEach(p => { p.vx *= f; p.vy *= f; });
+  let moving = r.stones.some(p => Math.hypot(p.vx,p.vy) >= BAL.stopAt);
+  if (r.flyT > BAL.maxFlyT) { r.stones.forEach(p => { p.vx = p.vy = 0; }); moving = false; }
+  if (!moving) tSettle();
+}
+
+/* ---- 止まった。フグは そこで爆発する ---- */
+function tSettle(){
+  const r = tRun, p = r.puff;
+  r.stones.forEach(s => { s.vx = s.vy = 0; });
+  const d = Math.hypot(p.x-HX, p.y-HY);
+  let pts = 0;
+  for (const ring of RING) if (d <= ring[0]) { pts = ring[1]; break; }
+  const caught = r.stones.filter(s => s.rock && Math.hypot(s.x-p.x, s.y-p.y) < BAL.blastR);
+  const bonus = caught.length * 10;
+  r.fx.push({ k:'wave', x:p.x, y:p.y, t:0 });
+  // 爆発したフグと、巻きこんだ石は 盤から消える
+  r.stones = r.stones.filter(s => s !== p && caught.indexOf(s) < 0);
+  r.score += pts + bonus;
+  r.puff = null;
+  tBar();
+
+  const line = (pts ? '<b>' + pts + 'てん</b>' : '的に とどきませんでした')
+             + (bonus ? '　じゃま石 ' + caught.length + 'こ <b>+' + bonus + '</b>' : '');
+  if (r.shot >= TSHOTS) {
+    r.phase = 'done';
+    const best = hs[r.id] || 0;
+    const rec = r.score > best;
+    if (rec) { hs[r.id] = r.score; save(); }
+    tMsg(line + '<br>ごうけい <b>' + r.score + 'てん</b>'
+       + (rec ? '　<b>さいこう記録！</b>' : '　（さいこう ' + Math.max(best, r.score) + '）'));
+    document.getElementById('trAgain').classList.add('show');
+  } else {
+    r.phase = 'wait';
+    tMsg(line);
+    setTimeout(() => { if (tRun === r && r.phase === 'wait') tNextShot(); }, 900);
+  }
+}
+
+/* ---- 描く ---- */
+function tDraw(){
+  const r = tRun; if (!r) return;
+  tctx.setTransform(tscale,0,0,tscale,0,0);
+  tctx.fillStyle = '#0f0d0b'; tctx.fillRect(0,0,TW,TH);
+  tctx.strokeStyle = '#1d1917'; tctx.lineWidth = 1;
+  for (let y = 60; y < TH; y += 60){ tctx.beginPath(); tctx.moveTo(0,y); tctx.lineTo(TW,y); tctx.stroke(); }
+
+  const cols = ['#7a5c12','#4d3d14','#332a16','#251f18'];
+  for (let i = RING.length-1; i >= 0; i--) {
+    tctx.fillStyle = cols[i];
+    tctx.beginPath(); tctx.arc(HX, HY, RING[i][0], 0, 7); tctx.fill();
+  }
+  tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
+  tctx.font = '600 10px "Noto Sans JP",sans-serif';
+  tctx.fillStyle = '#c9b48a';
+  for (let i = RING.length-1; i >= 1; i--) tctx.fillText(RING[i][1], HX, HY - RING[i][0] + 9);
+  tctx.font = '700 12px "Noto Sans JP",sans-serif';
+  tctx.fillStyle = '#231a08';
+  tctx.fillText('100', HX, HY);
+
+  for (const f of r.fx) {
+    if (f.k !== 'wave') continue;
+    const k = f.t/0.55;
+    tctx.strokeStyle = 'rgba(255,209,102,' + (0.7*(1-k)) + ')';
+    tctx.lineWidth = 4*(1-k) + 1;
+    tctx.beginPath(); tctx.arc(f.x, f.y, BAL.blastR*Math.min(1, k*1.3), 0, 7); tctx.stroke();
+  }
+
+  for (const s of r.stones) {
+    tctx.beginPath(); tctx.arc(s.x, s.y, BAL.r, 0, 7);
+    tctx.fillStyle = s.rock ? '#2e2823' : '#3a2f1a';
+    tctx.fill();
+    tctx.strokeStyle = s.rock ? '#4a4038' : '#ffd166';
+    tctx.lineWidth = 2; tctx.stroke();
+    tctx.font = '22px "Noto Sans JP",sans-serif';
+    tctx.fillText(s.rock ? '🪨' : '🐡', s.x, s.y + 1);
+  }
+
+  if (r.aim && r.puff) {
+    const dx = r.aim.sx-r.aim.cx, dy = r.aim.sy-r.aim.cy, d = Math.hypot(dx,dy);
+    if (d > BAL.pullMin) {
+      const k = Math.min(d, BAL.pullMax)/BAL.pullMax;
+      tctx.strokeStyle = 'rgba(255,209,102,.85)'; tctx.lineWidth = 3;
+      tctx.beginPath(); tctx.moveTo(r.puff.x, r.puff.y);
+      tctx.lineTo(r.puff.x + dx/d*90*k, r.puff.y + dy/d*90*k); tctx.stroke();
+    }
+  }
+}
+
+/* ---- 指 ---- */
+const tPt = e => {
+  const b = cvT.getBoundingClientRect();
+  return { x:(e.clientX-b.left)/b.width*TW, y:(e.clientY-b.top)/b.height*TH };
+};
+cvT.addEventListener('pointerdown', e => {
+  if (!tRun || tRun.phase !== 'aim') return;
+  cvT.setPointerCapture(e.pointerId);
+  const p = tPt(e); tRun.aim = { sx:p.x, sy:p.y, cx:p.x, cy:p.y };
+});
+cvT.addEventListener('pointermove', e => {
+  if (tRun && tRun.aim) { const p = tPt(e); tRun.aim.cx = p.x; tRun.aim.cy = p.y; }
+});
+['pointerup','pointercancel'].forEach(ev => cvT.addEventListener(ev, () => {
+  if (!tRun || !tRun.aim) return;
+  const a = tRun.aim; tRun.aim = null;
+  const dx = a.sx-a.cx, dy = a.sy-a.cy, d = Math.hypot(dx,dy);
+  if (d < BAL.pullMin || tRun.phase !== 'aim' || !tRun.puff) return;
+  const k = Math.min(d, BAL.pullMax)/BAL.pullMax;
+  tRun.puff.vx = dx/d*BAL.power*k; tRun.puff.vy = dy/d*BAL.power*k;
+  tRun.phase = 'fly'; tRun.flyT = 0;
+}));
+
+document.getElementById('trainBtn').addEventListener('click', openTrain);
+document.getElementById('trBack').addEventListener('click', () => {
+  if (tRun) { openTrain(); return; }   // 遊んでいる最中は、まず「えらぶ」へ戻す
+  closeTrain();
+});
+document.getElementById('trPrev').addEventListener('click', () => trMove(-1));
+document.getElementById('trNext').addEventListener('click', () => trMove(1));
+document.getElementById('trGo').addEventListener('click', trStart);
+document.getElementById('trAgain').addEventListener('click', trStart);
 
 /* ===== 編成画面 ===== */
 const pickEl = document.getElementById('pick');
@@ -1482,7 +1873,7 @@ function renderData(){
    閉じた時に保存が消える。消えても困らないよう、文字にして持ち出せるようにする。
    人が読める形にしてあるので、写真に撮っても中身が分かる */
 const IO_HEAD  = 'HAJIKI2';   // 形を変えたら必ず上げる。古い形を黙って読むと数字が混ざる
-const GAME_VER = '3.0.1';     // ★<title> と そろえる（check.js が見張っている）
+const GAME_VER = '3.1.0';     // ★<title> と そろえる（check.js が見張っている）
 const SEASON   = 's1';        // 強化を入れるたびに数える。「まぜてよい記録」の単位
 const verLabel = (v, s) =>
   (v || '3.0.0 より前') + '／' + (s ? 'シーズン' + s.slice(1) : 'シーズン なし');
@@ -1499,6 +1890,8 @@ function exportCode(){
     const c = comps[k], [tag, ids] = k.split('|');
     if (c.n) O.push('C ' + tag + ' ' + ids + ' ' + c.n + ' ' + c.w + ' ' + c.mw);
   }
+  // ミニゲームの最高点。対戦の数字とは別の箱なので、行の頭も分けてある
+  for (const g of GAMES) if (hs[g.id]) O.push('H ' + g.id + ' ' + hs[g.id]);
   return O.join('\n');
 }
 
@@ -1512,7 +1905,7 @@ function parseCode(txt){
   const nums = (a, k) => { const v = a.map(num); return v.length === k && !v.some(x => x === null) ? v : null; };
   // 版とシーズンは無くてもよい（3.0.0 までの文字には入っていない）
   const out = { ver:head[1] || null, season:head[2] || null,
-                m:{ n:newMode(), h:newMode() }, s:{}, c:{} };
+                m:{ n:newMode(), h:newMode() }, s:{}, c:{}, h:{} };
   const ids = POOL.map(p => p.id);
   for (const line of lines.slice(1)) {
     const c = line.split(/\s+/);
@@ -1527,6 +1920,9 @@ function parseCode(txt){
       if (parts.length !== 3 || parts.some(x => !ids.includes(x))) return null;
       const v = nums(c.slice(3, 6), 3); if (!v) return null;
       out.c[c[1] + '|' + parts.slice().sort().join('+')] = { n:v[0], w:v[1], mw:v[2] };
+    } else if (c[0] === 'H' && GAMES.some(g => g.id === c[1])) {
+      const v = nums(c.slice(2, 3), 1); if (!v) return null;
+      out.h[c[1]] = v[0];
     } else return null;
   }
   return (out.m.n.n + out.m.h.n) ? out : null;
@@ -1547,6 +1943,8 @@ function mergeCode(g){
     const a = cmp(k), b = g.c[k];
     a.n += b.n; a.w += b.w; a.mw += b.mw;
   }
+  // ★最高点だけは「足す」ではなく「高い方」。合計にしたら記録の意味がなくなる
+  for (const k in g.h) if (g.h[k] > (hs[k] || 0)) hs[k] = g.h[k];
 }
 
 
