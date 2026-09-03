@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 3.2.0</title>
+<title>はじきあい 3.2.1</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -121,12 +121,22 @@ canvas{ display:block; border-radius:12px; border:1px solid var(--line); backgro
 #trGo:disabled{ background:var(--panel); color:#6b5f53; border:1px solid var(--line) }
 
 #trBar{
-  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:space-between; gap:8px; flex:0 0 auto;
   background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:6px 12px;
 }
-#trBar .k{ font-size:10px; color:var(--dim); letter-spacing:.1em }
+#trBar .c{ display:flex; align-items:baseline; gap:6px; min-width:0 }
+/* ★display を書いた要素は hidden が効かない（作者の指定が勝つ）。
+   オニの帯に「とくてん」が残ったままだった */
+#trBar .c[hidden]{ display:none }
+#trBar .k{ font-size:10px; color:var(--dim); letter-spacing:.06em; white-space:nowrap }
 #trBar .v{ font-size:17px; color:var(--gold) }
-#trBar .sp{ flex:1 }
+/* 最高記録を こえている間は 光らせる。★伸びた瞬間が見えないと 手応えが出ない */
+#trBar .c.rec .k{ color:var(--good) }
+#trBar .c.rec .v{ color:var(--good); animation:recPulse .9s ease-in-out infinite }
+@keyframes recPulse{ 50%{ opacity:.45 } }
+@media (prefers-reduced-motion:reduce){ #trBar .c.rec .v{ animation:none } }
+#trGoal{ font-size:10px; color:var(--dim); letter-spacing:.14em; margin-top:2px }
+#trGoal b{ color:var(--gold); font-size:13px; letter-spacing:0 }
 #trStage{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0;
           position:relative; touch-action:none }
 #trMsg{ flex:0 0 auto; text-align:center; font-size:12px; color:var(--dim); min-height:34px; line-height:1.6 }
@@ -403,6 +413,7 @@ a.mini{ text-decoration:none; text-align:center; line-height:1 }
         <div class="l" id="trLine"></div>
         <div class="d" id="trDesc"></div>
         <div id="trBest"></div>
+        <div id="trGoal"></div>
       </div>
       <button id="trNext" aria-label="つぎ">▶</button>
     </div>
@@ -412,9 +423,9 @@ a.mini{ text-decoration:none; text-align:center; line-height:1 }
 
   <div id="trRun">
     <div id="trBar">
-      <span class="k" id="trK1">なげた</span><span class="v num" id="trShot">0/3</span>
-      <span class="sp"></span>
-      <span class="k" id="trK2">とくてん</span><span class="v num" id="trScore">0</span>
+      <div class="c"><span class="k" id="trK1">なげた</span><span class="v num" id="trShot">0/3</span></div>
+      <div class="c" id="trScoreC"><span class="k">とくてん</span><span class="v num" id="trScore">0</span></div>
+      <div class="c" id="trHiC"><span class="k" id="trK3">さいこう</span><span class="v num" id="trHi">0</span></div>
     </div>
     <div id="trStage"><canvas id="cvT"></canvas></div>
     <div id="trMsg"></div>
@@ -1488,12 +1499,16 @@ function loop(now){
 
 const GAMES = [
   { id:'bowl', face:'🐡', name:'フグのボウリング', line:'ぜんぶ たおせ',
+    unit:'てん', goal:360, goalName:'まん点',
     desc:'3ステージ、<b>1ステージ1投</b>。<br>ピンは <b>すり抜けます</b>。' +
          '止まった場所の <b>ばくはつの輪</b>に入っていたピンが 倒れます。' +
          '<br>ねらっている間、輪の大きさが 見えています。<b>ぜんぶ入る場所を さがして、そこで止める</b>' +
          '<br>2面から先は <b>壁で跳ね返さないと 届きません</b>',
     ready:true },
   { id:'oni', face:'👹', name:'オニのつうろ', line:'壁を刻むほど 速くなる',
+    unit:'m', goal:764, goalName:'めやす',
+    /* めやす は 総当りで測った いちばん良い投げ方の距離。
+       まん点の無い遊びなので、目指す先が無いと 何をすればいいか分からない */
     desc:'せまい通路を <b>どこまで 進めるか</b>。<br>' +
          'かべに あたるたび <b>速くなります</b>。まっすぐ上に撃つと 当たらないので 失速します。' +
          '<br>道は <b>毎回おなじ</b>。運ではなく 腕で伸びます',
@@ -1577,7 +1592,9 @@ function renderTrain(){
   document.getElementById('trDesc').innerHTML = g.ready ? g.desc : 'まだ できていません';
   document.getElementById('trCard').classList.toggle('soon', !g.ready);
   document.getElementById('trBest').innerHTML = g.ready
-    ? 'HIGH SCORE<span class="num">' + (hs[g.id] || 0) + '</span>' : '';
+    ? 'HIGH SCORE<span class="num">' + (hs[g.id] || 0) + g.unit + '</span>' : '';
+  document.getElementById('trGoal').innerHTML = g.ready
+    ? g.goalName + '　<b>' + g.goal + g.unit + '</b>' : '';
   document.getElementById('trDots').innerHTML =
     GAMES.map((_, k) => '<span class="' + (k === tIdx ? 'on' : '') + '"></span>').join('');
   const go = document.getElementById('trGo');
@@ -1607,7 +1624,8 @@ function trStart(){
   document.getElementById('trHeadName').textContent = g.name;
   if (g.id === 'oni') { oStart(); return; }
   document.getElementById('trK1').textContent = 'なげた';
-  document.getElementById('trK2').textContent = 'とくてん';
+  document.getElementById('trK3').textContent = 'さいこう';
+  document.getElementById('trScoreC').hidden = false;
   tRun = { id:g.id, stage:-1, score:0, phase:'aim', aim:null, fx:[],
            pins:[], walls:[], puff:null, flyT:0, perfect:0, bounce:0 };
   tSetStage(0);
@@ -1622,15 +1640,24 @@ function tSetStage(i){
   r.phase = 'aim'; r.flyT = 0; r.fx = []; r.bounce = 0;
   tBar();
   tMsg(i === 0
-    ? 'ひっぱって はなす。<b>まるい線の中のピンが 倒れます</b>'
+    ? 'ひっぱって はなす。<b>まるい線の中のピンが 倒れます</b><br>まん点は <b>360てん</b>'
     : '<b>' + s.name + '</b>　ピン ' + r.pins.length + '本　'
       + '<b style="color:var(--foe)">かべで 跳ね返さないと 届きません</b>');
   document.getElementById('trAgain').classList.remove('show');
+}
+/* ★最高記録は 遊んでいる最中にも出す。
+   終わってから知らされるだけでは「更新した」実感が出ない。
+   いま超えている間は 帯を光らせる */
+function tHi(cur, id){
+  const best = hs[id] || 0;
+  document.getElementById('trHi').textContent = Math.max(cur, best);
+  document.getElementById('trHiC').classList.toggle('rec', cur > best);
 }
 function tBar(){
   const r = tRun;
   document.getElementById('trShot').textContent = (r.stage+1) + '/' + STAGES.length;
   document.getElementById('trScore').textContent = r.score;
+  tHi(r.score, 'bowl');
 }
 function tMsg(h){ document.getElementById('trMsg').innerHTML = h; }
 
@@ -1817,17 +1844,18 @@ function oStart(){
   tRun = { id:'oni', phase:'aim', aim:null, fx:[], bounce:0, flyT:0,
            puff:{ x:180, y:0, vx:0, vy:0 }, best:0, trail:[], cam:0 };
   document.getElementById('trK1').textContent = 'すすんだ (m)';
-  document.getElementById('trK2').textContent = 'さいこう (m)';
+  document.getElementById('trK3').textContent = 'さいこう (m)';
+  document.getElementById('trScoreC').hidden = true;   // オニに とくてんは無い
   oBar();
   tMsg('ひっぱって はなす。<b>かべに あたるたび 速くなります</b><br>' +
-       'ただし <b>速くなるのは 最初の4秒だけ</b>。まっすぐ上では 一度も当たりません');
+       'ただし <b>速くなるのは 最初の4秒だけ</b>。まっすぐ上では 一度も当たりません<br>' +
+       'めやすは <b>764m</b>');
   document.getElementById('trAgain').classList.remove('show');
   tFit();
 }
 function oBar(){
-  const r = tRun;
-  document.getElementById('trShot').textContent = Math.floor(r.best/OMET);
-  document.getElementById('trScore').textContent = (hs.oni || 0);
+  document.getElementById('trShot').textContent = Math.floor(tRun.best/OMET);
+  tHi(Math.floor(tRun.best/OMET), 'oni');
 }
 
 function oPhys(dt){
@@ -2145,7 +2173,7 @@ function renderData(){
    閉じた時に保存が消える。消えても困らないよう、文字にして持ち出せるようにする。
    人が読める形にしてあるので、写真に撮っても中身が分かる */
 const IO_HEAD  = 'HAJIKI2';   // 形を変えたら必ず上げる。古い形を黙って読むと数字が混ざる
-const GAME_VER = '3.2.0';     // ★<title> と そろえる（check.js が見張っている）
+const GAME_VER = '3.2.1';     // ★<title> と そろえる（check.js が見張っている）
 const SEASON   = 's1';        // 強化を入れるたびに数える。「まぜてよい記録」の単位
 const verLabel = (v, s) =>
   (v || '3.0.0 より前') + '／' + (s ? 'シーズン' + s.slice(1) : 'シーズン なし');
