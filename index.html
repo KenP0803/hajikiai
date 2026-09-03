@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>はじきあい 3.1.0</title>
+<title>はじきあい 3.2.0</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+JP:wght@500;700&display=swap');
 
@@ -412,9 +412,9 @@ a.mini{ text-decoration:none; text-align:center; line-height:1 }
 
   <div id="trRun">
     <div id="trBar">
-      <span class="k">なげた</span><span class="v num" id="trShot">0/3</span>
+      <span class="k" id="trK1">なげた</span><span class="v num" id="trShot">0/3</span>
       <span class="sp"></span>
-      <span class="k">とくてん</span><span class="v num" id="trScore">0</span>
+      <span class="k" id="trK2">とくてん</span><span class="v num" id="trScore">0</span>
     </div>
     <div id="trStage"><canvas id="cvT"></canvas></div>
     <div id="trMsg"></div>
@@ -1479,31 +1479,76 @@ function loop(now){
    ★物理はここに別に持っている。対戦側の physics() は
      ダメージ・ターン・戦績と絡み合っていて、練習から呼ぶと必ず壊す。
      共有するのは BAL の数（大きさ・摩擦・力）だけにして、動かし方は分ける。
-     数が1か所なら、対戦の手ざわりを直した時に練習も一緒に直る */
+   ★ピンには当たり判定が無い。素通りする。
+     倒れるのは「止まった場所の 衝撃波の輪に入っていた」時だけ。
+     つまり この遊びは 最初から最後まで「どこで止めるか」しかない——
+     フグという コマそのものの練習になる。
+   ★壁は動かない。当たると跳ね返る。
+     動く障害物にすると 同じ投げ方でも結果が変わって、練習にならない */
 
 const GAMES = [
-  { id:'curl', face:'🐡', name:'フグのカーリング', line:'ど真ん中で 止まれ',
-    desc:'3投。<b>止まった場所</b>が 的の 中心に近いほど 高とくてん。ど真ん中は <b>100てん</b>。' +
-         '<br>止まった時の ばくはつに じゃま石を 巻きこむと <b>+10</b>。' +
-         '<br>フグは「当てる」技ではなく <b>「置く」技</b>です',
+  { id:'bowl', face:'🐡', name:'フグのボウリング', line:'ぜんぶ たおせ',
+    desc:'3ステージ、<b>1ステージ1投</b>。<br>ピンは <b>すり抜けます</b>。' +
+         '止まった場所の <b>ばくはつの輪</b>に入っていたピンが 倒れます。' +
+         '<br>ねらっている間、輪の大きさが 見えています。<b>ぜんぶ入る場所を さがして、そこで止める</b>' +
+         '<br>2面から先は <b>壁で跳ね返さないと 届きません</b>',
     ready:true },
   { id:'oni', face:'👹', name:'オニのつうろ', line:'壁を刻むほど 速くなる',
-    desc:'せまい通路を どこまで 進めるか。<br>まっすぐ上に撃つと 壁に当たらず 失速します',
-    ready:false }
+    desc:'せまい通路を <b>どこまで 進めるか</b>。<br>' +
+         'かべに あたるたび <b>速くなります</b>。まっすぐ上に撃つと 当たらないので 失速します。' +
+         '<br>道は <b>毎回おなじ</b>。運ではなく 腕で伸びます',
+    ready:true }
 ];
 
-const TW = 360, TH = 540;                          // 対戦と同じ広さ
-const HX = 180, HY = 130;                          // 的の中心
-const RING = [[24,100],[52,50],[86,20],[124,10]];  // 内側から。半径と点数
-const GUARD = [[180,300],[118,258],[242,258]];
-/* じゃま石は毎回おなじ場所に置く。
-   ランダムにすると最高点が運で決まって、練習にならない。
-   ★総当りで測ったところ、いちばん良い線は「まっすぐ・つよさ700」で3投230点。
-     ただし角度が1度ずれると130点、2度で90点まで落ちる。
-     指のブレ（±3度・±5%）を入れると へいきん78点、200点超えは0.3%。
-     覚えるだけでは届かず、毎回きちんと引く必要がある——この細さを崩さないこと */
-const TSTART = [180, 470];
-const TSHOTS = 3;
+const TW = 360, TH = 540;     // 対戦と同じ広さ
+const PIN_PT = 10, ALL_PT = 50;
+
+/* ★フグだけ、引っぱりに対して出る力を弱くしてある。
+   対戦と同じ力だと、指をめいっぱい引くと 盤を2000px ぶん転がってしまい、
+   引きはじめの わずかな差が 大きく効いて 狙えない。
+   半分にすると、引ける幅ぜんぶが 盤の中の話になって 置きに行ける */
+const TPOWER = 0.5;
+
+/* ピンを ちょうどの円に並べる。
+   ★手で座標を書くと 縦長の いびつな輪になる。実際そうなって直した */
+const ring = (cx, cy, r, n, off) => {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = (off || 0) + i/n*Math.PI*2;
+    out.push([Math.round(cx + Math.cos(a)*r), Math.round(cy + Math.sin(a)*r)]);
+  }
+  return out;
+};
+
+/* ステージ。
+   ★どの面にも「ぜんぶ入る停止点」が必ず在ること。
+     無い置き方は、どんなに上手くても倒せない——練習ではなく意地悪になる。
+   ★2面と3面は「跳ね返り無しでは倒せない」こと。
+     まっすぐ置きに行けるだけの面が続くと、壁を使う腕が身につかない。
+   この2つは check.js が毎回 見張っている。
+
+   ★指のブレ（角度±2.5度・つよさ±5%）込みで測った、ぜんぶ倒せる率：
+     1面 100% / 2面 46% / 3面 42%　→ 3面つづけて 19%（5回に1回）。
+     外した時も へいきん84%のピンは倒れるので、点は伸びる。
+     つよさを半分にした（TPOWER）ぶん 狙いやすくなったので、
+     輪を大きくして締め直してある。どちらかを触ったら 必ず測り直すこと */
+const STAGES = [
+  { name:'まんなか', start:[180,480], walls:[],
+    /* 1面。まっすぐ置きに行ける。「できる」を先に持ってもらう面 */
+    pins: ring(180, 196, 64, 7) },
+
+  { name:'かべ', start:[180,486], walls:[[0,250,208,22]],
+    /* 2面。左から伸びる壁が まっすぐの道をふさぐ。
+       右の空きから上がって、右の壁で跳ね返して 左上へ入れる */
+    pins: ring(124, 160, 104, 8) },
+
+  { name:'ぎゃく', start:[180,486], walls:[[150,252,210,22]],
+    /* 3面。2面の逆。右から壁が伸びるので、左の空きから上がって
+       左の壁で跳ね返す。輪が大きいぶん、止める場所が狭い。
+       ★壁を2枚にして跳ね返りを増やすと、同じ投げ方でも結果が散らばって
+         「120回に1回」になった。跳ね返りは2回までに収めること */
+    pins: ring(230, 168, 112, 10) }
+];
 
 let tIdx = 0;      // えらんでいるミニゲーム
 let tRun = null;   // 遊んでいる最中の状態。null なら選んでいる最中
@@ -1560,137 +1605,180 @@ function trStart(){
   const T = document.getElementById('train');
   T.classList.remove('sel'); T.classList.add('run');
   document.getElementById('trHeadName').textContent = g.name;
-  tRun = { id:g.id, shot:0, score:0, phase:'aim', aim:null, fx:[],
-           stones:GUARD.map(g2 => ({ x:g2[0], y:g2[1], vx:0, vy:0, rock:true })),
-           puff:null, flyT:0 };
-  tNextShot();
+  if (g.id === 'oni') { oStart(); return; }
+  document.getElementById('trK1').textContent = 'なげた';
+  document.getElementById('trK2').textContent = 'とくてん';
+  tRun = { id:g.id, stage:-1, score:0, phase:'aim', aim:null, fx:[],
+           pins:[], walls:[], puff:null, flyT:0, perfect:0, bounce:0 };
+  tSetStage(0);
   tFit();
 }
-function tNextShot(){
-  const r = tRun;
-  r.shot++;
-  r.puff = { x:TSTART[0], y:TSTART[1], vx:0, vy:0, rock:false };
-  r.stones.push(r.puff);
-  r.phase = 'aim'; r.flyT = 0;
+function tSetStage(i){
+  const r = tRun, s = STAGES[i];
+  r.stage = i;
+  r.pins  = s.pins.map(q => ({ x:q[0], y:q[1], down:false }));
+  r.walls = s.walls.map(q => ({ x:q[0], y:q[1], w:q[2], h:q[3] }));
+  r.puff  = { x:s.start[0], y:s.start[1], vx:0, vy:0 };
+  r.phase = 'aim'; r.flyT = 0; r.fx = []; r.bounce = 0;
   tBar();
-  tMsg(r.shot === 1
-    ? 'ひっぱって はなす。<b>つよさで 止まる場所が 決まります</b>'
-    : 'のこり ' + (TSHOTS - r.shot + 1) + '投');
+  tMsg(i === 0
+    ? 'ひっぱって はなす。<b>まるい線の中のピンが 倒れます</b>'
+    : '<b>' + s.name + '</b>　ピン ' + r.pins.length + '本　'
+      + '<b style="color:var(--foe)">かべで 跳ね返さないと 届きません</b>');
   document.getElementById('trAgain').classList.remove('show');
 }
 function tBar(){
-  document.getElementById('trShot').textContent = tRun.shot + '/' + TSHOTS;
-  document.getElementById('trScore').textContent = tRun.score;
+  const r = tRun;
+  document.getElementById('trShot').textContent = (r.stage+1) + '/' + STAGES.length;
+  document.getElementById('trScore').textContent = r.score;
 }
 function tMsg(h){ document.getElementById('trMsg').innerHTML = h; }
 
-/* ---- 物理。対戦とは別物だが、数は BAL から借りる ---- */
-function tPhys(dt){
-  const r = tRun;
-  let sp = 0; r.stones.forEach(p => { sp = Math.max(sp, Math.hypot(p.vx,p.vy)); });
-  const steps = Math.min(12, Math.max(1, Math.ceil(sp*dt/7)));
+/* ---- 物理。ピンは素通り、壁は動かない ---- */
+function bounceOff(p, nx, ny){
+  const vn = p.vx*nx + p.vy*ny;
+  if (vn >= 0) return false;
+  p.vx = (p.vx - 2*vn*nx)*BAL.wallBounce;
+  p.vy = (p.vy - 2*vn*ny)*BAL.wallBounce;
+  return true;
+}
+function hitWall(p, w){
+  // 丸と 四角の当たり。四角の中でいちばん近い点を出して、そこから押し返す
+  const qx = Math.max(w.x, Math.min(p.x, w.x + w.w));
+  const qy = Math.max(w.y, Math.min(p.y, w.y + w.h));
+  let dx = p.x-qx, dy = p.y-qy, d = Math.hypot(dx, dy);
+  if (d >= BAL.r) return false;
+  if (d === 0) {               // 中に入り込んだ。いちばん近い辺へ逃がす
+    const l = p.x-w.x, rr = w.x+w.w-p.x, t = p.y-w.y, b = w.y+w.h-p.y;
+    const m = Math.min(l, rr, t, b);
+    dx = m === l ? -1 : m === rr ? 1 : 0;
+    dy = m === t ? -1 : m === b ? 1 : 0;
+    d = 1;
+  }
+  const nx = dx/d, ny = dy/d;
+  p.x = qx + nx*BAL.r; p.y = qy + ny*BAL.r;
+  return bounceOff(p, nx, ny);
+}
+
+function bPhys(dt){
+  const r = tRun, p = r.puff;
+  const sp = Math.hypot(p.vx, p.vy);
+  const steps = Math.min(12, Math.max(1, Math.ceil(sp*dt/6)));
   const h = dt/steps;
   for (let k = 0; k < steps; k++) {
-    for (const p of r.stones) {
-      p.x += p.vx*h; p.y += p.vy*h;
-      if (p.x < BAL.r)    { p.x = BAL.r;    p.vx = -p.vx*BAL.wallBounce; }
-      if (p.x > TW-BAL.r) { p.x = TW-BAL.r; p.vx = -p.vx*BAL.wallBounce; }
-      if (p.y < BAL.r)    { p.y = BAL.r;    p.vy = -p.vy*BAL.wallBounce; }
-      if (p.y > TH-BAL.r) { p.y = TH-BAL.r; p.vy = -p.vy*BAL.wallBounce; }
-    }
-    // ぶつかり。同じ重さのはね返り。ダメージも順番も無い
-    const L = r.stones;
-    for (let a = 0; a < L.length; a++) for (let b = a+1; b < L.length; b++) {
-      const A = L[a], B = L[b];
-      const dx = B.x-A.x, dy = B.y-A.y, d = Math.hypot(dx,dy), min = BAL.r*2;
-      if (d >= min || d === 0) continue;
-      const nx = dx/d, ny = dy/d;
-      const vn = (A.vx-B.vx)*nx + (A.vy-B.vy)*ny;
-      const push = (min-d)/2 + 0.1;
-      A.x -= nx*push; A.y -= ny*push; B.x += nx*push; B.y += ny*push;
-      if (vn <= 0) continue;
-      const j = vn*BAL.ballBounce;
-      A.vx -= j*nx; A.vy -= j*ny; B.vx += j*nx; B.vy += j*ny;
-    }
+    p.x += p.vx*h; p.y += p.vy*h;
+    let hit = false;
+    if (p.x < BAL.r)    { p.x = BAL.r;    p.vx = -p.vx*BAL.wallBounce; hit = true; }
+    if (p.x > TW-BAL.r) { p.x = TW-BAL.r; p.vx = -p.vx*BAL.wallBounce; hit = true; }
+    if (p.y < BAL.r)    { p.y = BAL.r;    p.vy = -p.vy*BAL.wallBounce; hit = true; }
+    if (p.y > TH-BAL.r) { p.y = TH-BAL.r; p.vy = -p.vy*BAL.wallBounce; hit = true; }
+    for (const w of r.walls) if (hitWall(p, w)) hit = true;
+    if (hit) { r.bounce++; r.fx.push({ k:'spark', x:p.x, y:p.y, t:0 }); }
   }
   r.flyT += dt;
   const f = Math.pow(BAL.friction, dt);
-  r.stones.forEach(p => { p.vx *= f; p.vy *= f; });
-  let moving = r.stones.some(p => Math.hypot(p.vx,p.vy) >= BAL.stopAt);
-  if (r.flyT > BAL.maxFlyT) { r.stones.forEach(p => { p.vx = p.vy = 0; }); moving = false; }
-  if (!moving) tSettle();
+  p.vx *= f; p.vy *= f;
+  if (Math.hypot(p.vx, p.vy) < BAL.stopAt || r.flyT > BAL.maxFlyT) { p.vx = p.vy = 0; tSettle(); }
 }
 
-/* ---- 止まった。フグは そこで爆発する ---- */
+/* ---- 止まった。そこで爆発する ---- */
 function tSettle(){
   const r = tRun, p = r.puff;
-  r.stones.forEach(s => { s.vx = s.vy = 0; });
-  const d = Math.hypot(p.x-HX, p.y-HY);
-  let pts = 0;
-  for (const ring of RING) if (d <= ring[0]) { pts = ring[1]; break; }
-  const caught = r.stones.filter(s => s.rock && Math.hypot(s.x-p.x, s.y-p.y) < BAL.blastR);
-  const bonus = caught.length * 10;
+  let got = 0;
+  for (const q of r.pins)
+    if (!q.down && Math.hypot(q.x-p.x, q.y-p.y) < BAL.blastR) { q.down = true; got++; }
   r.fx.push({ k:'wave', x:p.x, y:p.y, t:0 });
-  // 爆発したフグと、巻きこんだ石は 盤から消える
-  r.stones = r.stones.filter(s => s !== p && caught.indexOf(s) < 0);
-  r.score += pts + bonus;
-  r.puff = null;
+
+  const all = got === r.pins.length;
+  const gain = got*PIN_PT + (all ? ALL_PT : 0);
+  r.score += gain;
+  if (all) r.perfect++;
   tBar();
 
-  const line = (pts ? '<b>' + pts + 'てん</b>' : '的に とどきませんでした')
-             + (bonus ? '　じゃま石 ' + caught.length + 'こ <b>+' + bonus + '</b>' : '');
-  if (r.shot >= TSHOTS) {
+  const line = all
+    ? '<b>' + got + '本 ぜんぶ！</b>　+' + gain
+    : got + ' / ' + r.pins.length + ' 本　+' + gain;
+
+  if (r.stage >= STAGES.length-1) {
     r.phase = 'done';
-    const best = hs[r.id] || 0;
-    const rec = r.score > best;
+    const best = hs[r.id] || 0, rec = r.score > best;
     if (rec) { hs[r.id] = r.score; save(); }
-    tMsg(line + '<br>ごうけい <b>' + r.score + 'てん</b>'
-       + (rec ? '　<b>さいこう記録！</b>' : '　（さいこう ' + Math.max(best, r.score) + '）'));
+    const fin = r.perfect === STAGES.length
+      ? '<b>ぜんステージ パーフェクト！</b>'
+      : (r.perfect ? r.perfect + 'ステージ ぜんぶ倒し' : '');
+    tMsg(line + '<br>ごうけい <b>' + r.score + 'てん</b>　' + fin
+       + (rec ? '　<b>さいこう記録！</b>' : ''));
     document.getElementById('trAgain').classList.add('show');
   } else {
     r.phase = 'wait';
     tMsg(line);
-    setTimeout(() => { if (tRun === r && r.phase === 'wait') tNextShot(); }, 900);
+    setTimeout(() => { if (tRun === r && r.phase === 'wait') tSetStage(r.stage+1); }, 1100);
   }
 }
 
 /* ---- 描く ---- */
-function tDraw(){
+function drawPin(x, y, down){
+  tctx.save(); tctx.translate(x, y);
+  if (down) { tctx.rotate(1.1); tctx.globalAlpha = 0.32; }
+  tctx.fillStyle = down ? '#6b5f53' : '#f0e7dd';
+  tctx.beginPath();
+  tctx.moveTo(0,-14);
+  tctx.quadraticCurveTo(7,-8, 4,-1);
+  tctx.quadraticCurveTo(11,7, 7,13);
+  tctx.lineTo(-7,13);
+  tctx.quadraticCurveTo(-11,7, -4,-1);
+  tctx.quadraticCurveTo(-7,-8, 0,-14);
+  tctx.fill();
+  if (!down) { tctx.fillStyle = '#e0725d'; tctx.fillRect(-5,-7,10,3); }
+  tctx.restore();
+}
+
+function bDraw(){
   const r = tRun; if (!r) return;
   tctx.setTransform(tscale,0,0,tscale,0,0);
   tctx.fillStyle = '#0f0d0b'; tctx.fillRect(0,0,TW,TH);
   tctx.strokeStyle = '#1d1917'; tctx.lineWidth = 1;
   for (let y = 60; y < TH; y += 60){ tctx.beginPath(); tctx.moveTo(0,y); tctx.lineTo(TW,y); tctx.stroke(); }
 
-  const cols = ['#7a5c12','#4d3d14','#332a16','#251f18'];
-  for (let i = RING.length-1; i >= 0; i--) {
-    tctx.fillStyle = cols[i];
-    tctx.beginPath(); tctx.arc(HX, HY, RING[i][0], 0, 7); tctx.fill();
+  // ねらっている間は、爆発の輪をそのまま見せる。
+  // ★「どこに置けば入るか」が見えないと、当てずっぽうの遊びになる
+  if (r.phase === 'aim' && r.puff) {
+    tctx.setLineDash([6,7]);
+    tctx.strokeStyle = 'rgba(255,209,102,.34)'; tctx.lineWidth = 2;
+    tctx.beginPath(); tctx.arc(r.puff.x, r.puff.y, BAL.blastR, 0, 7); tctx.stroke();
+    tctx.setLineDash([]);
   }
-  tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
-  tctx.font = '600 10px "Noto Sans JP",sans-serif';
-  tctx.fillStyle = '#c9b48a';
-  for (let i = RING.length-1; i >= 1; i--) tctx.fillText(RING[i][1], HX, HY - RING[i][0] + 9);
-  tctx.font = '700 12px "Noto Sans JP",sans-serif';
-  tctx.fillStyle = '#231a08';
-  tctx.fillText('100', HX, HY);
+
+  for (const w of r.walls) {
+    tctx.fillStyle = '#2e2823';
+    tctx.beginPath(); tctx.roundRect(w.x, w.y, w.w, w.h, 6); tctx.fill();
+    tctx.strokeStyle = '#4a4038'; tctx.lineWidth = 2; tctx.stroke();
+  }
 
   for (const f of r.fx) {
+    if (f.k === 'spark') {
+      const k = f.t/0.3;
+      tctx.fillStyle = 'rgba(255,209,102,' + (0.6*(1-k)) + ')';
+      tctx.beginPath(); tctx.arc(f.x, f.y, 4 + 14*k, 0, 7); tctx.fill();
+    }
     if (f.k !== 'wave') continue;
     const k = f.t/0.55;
-    tctx.strokeStyle = 'rgba(255,209,102,' + (0.7*(1-k)) + ')';
-    tctx.lineWidth = 4*(1-k) + 1;
-    tctx.beginPath(); tctx.arc(f.x, f.y, BAL.blastR*Math.min(1, k*1.3), 0, 7); tctx.stroke();
+    tctx.fillStyle = 'rgba(255,209,102,' + (0.13*(1-k)) + ')';
+    tctx.beginPath(); tctx.arc(f.x, f.y, BAL.blastR, 0, 7); tctx.fill();
+    tctx.strokeStyle = 'rgba(255,209,102,' + (0.8*(1-k)) + ')';
+    tctx.lineWidth = 5*(1-k) + 1;
+    tctx.beginPath(); tctx.arc(f.x, f.y, BAL.blastR*Math.min(1, k*1.35), 0, 7); tctx.stroke();
   }
 
-  for (const s of r.stones) {
-    tctx.beginPath(); tctx.arc(s.x, s.y, BAL.r, 0, 7);
-    tctx.fillStyle = s.rock ? '#2e2823' : '#3a2f1a';
-    tctx.fill();
-    tctx.strokeStyle = s.rock ? '#4a4038' : '#ffd166';
-    tctx.lineWidth = 2; tctx.stroke();
+  for (const q of r.pins) drawPin(q.x, q.y, q.down);
+
+  if (r.puff) {
+    tctx.beginPath(); tctx.arc(r.puff.x, r.puff.y, BAL.r, 0, 7);
+    tctx.fillStyle = '#3a2f1a'; tctx.fill();
+    tctx.strokeStyle = '#ffd166'; tctx.lineWidth = 2; tctx.stroke();
     tctx.font = '22px "Noto Sans JP",sans-serif';
-    tctx.fillText(s.rock ? '🪨' : '🐡', s.x, s.y + 1);
+    tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
+    tctx.fillText('🐡', r.puff.x, r.puff.y + 1);
   }
 
   if (r.aim && r.puff) {
@@ -1699,10 +1787,193 @@ function tDraw(){
       const k = Math.min(d, BAL.pullMax)/BAL.pullMax;
       tctx.strokeStyle = 'rgba(255,209,102,.85)'; tctx.lineWidth = 3;
       tctx.beginPath(); tctx.moveTo(r.puff.x, r.puff.y);
-      tctx.lineTo(r.puff.x + dx/d*90*k, r.puff.y + dy/d*90*k); tctx.stroke();
+      tctx.lineTo(r.puff.x + dx/d*95*k, r.puff.y + dy/d*95*k); tctx.stroke();
     }
   }
 }
+
+/* ===== 👹オニのつうろ =====
+   壁に当たるたび速くなる、というオニの技を そのまま遊びにしたもの。
+   ★通路の幅も、加速のきまりも 本番とまったく同じにしてある。
+     ここで覚えた角度が、そのまま対戦で使えるように。
+   ★幅を本番と同じ 360 にすると、通路は曲がれない（盤の幅いっぱいだから）。
+     だから これは まっすぐな縦穴。曲がる道が欲しくなったら、
+     幅を狭める必要がある——曲げるための余白が要る。
+   ★加速は 最初の4秒だけ（BAL.accelTime）。そこを過ぎたら もう速くならず、
+     摩擦だけが残って 止まる。走りが自然に終わるのは この決まりのおかげ。
+   ★遊びの芯：まっすぐ上に撃つと 壁に当たらないので 一度も速くならない。
+     浅く撃つと 当たる回数は増えるが、上へ進む分がへる。
+     4秒のあいだに いちばん高く上がる角度は どこか——それだけの遊び */
+
+const OTIME = 30;          // 保険。どんな走りでもこの秒数で切る
+const OMET  = 10;          // 10 を 1m と数える
+const OWALL = BAL.r;       // 左右のかべ。盤とおなじ
+
+/* 通路の形。本番と同じ幅なので、どこまで行っても まっすぐ。
+   ★曲がる道に戻すなら ここを y の関数にする（描画も当たりも ここだけ見ている） */
+function ogeo(){ return { c:TW/2, w:TW/2 - OWALL, dc:0, dw:0 }; }
+
+function oStart(){
+  tRun = { id:'oni', phase:'aim', aim:null, fx:[], bounce:0, flyT:0,
+           puff:{ x:180, y:0, vx:0, vy:0 }, best:0, trail:[], cam:0 };
+  document.getElementById('trK1').textContent = 'すすんだ (m)';
+  document.getElementById('trK2').textContent = 'さいこう (m)';
+  oBar();
+  tMsg('ひっぱって はなす。<b>かべに あたるたび 速くなります</b><br>' +
+       'ただし <b>速くなるのは 最初の4秒だけ</b>。まっすぐ上では 一度も当たりません');
+  document.getElementById('trAgain').classList.remove('show');
+  tFit();
+}
+function oBar(){
+  const r = tRun;
+  document.getElementById('trShot').textContent = Math.floor(r.best/OMET);
+  document.getElementById('trScore').textContent = (hs.oni || 0);
+}
+
+function oPhys(dt){
+  const r = tRun, p = r.puff;
+  const hot = r.flyT < BAL.accelTime;        // ★本番と同じ。4秒すぎたら もう速くならない
+  const sp0 = Math.hypot(p.vx, p.vy);
+  const steps = Math.min(24, Math.max(1, Math.ceil(sp0*dt/4)));
+  const h = dt/steps;
+  for (let k = 0; k < steps; k++) {
+    p.x += p.vx*h; p.y += p.vy*h;
+    let hit = false;
+    if (p.x < OWALL)      { p.x = OWALL;      p.vx = -p.vx; hit = true; }
+    if (p.x > TW-OWALL)   { p.x = TW-OWALL;   p.vx = -p.vx; hit = true; }
+    if (hit) {
+      if (hot) {
+        p.vx *= BAL.accelWall; p.vy *= BAL.accelWall;
+        const sp = Math.hypot(p.vx, p.vy);
+        if (sp > BAL.accelMax) { p.vx *= BAL.accelMax/sp; p.vy *= BAL.accelMax/sp; }
+        r.bounce++;
+        r.fx.push({ k:'spark', x:p.x, y:p.y, t:0 });
+      } else {
+        p.vx *= BAL.wallBounce; p.vy *= BAL.wallBounce;   // 4秒すぎたら ただの壁
+        r.fx.push({ k:'bang', x:p.x, y:p.y, t:0 });
+      }
+    }
+    if (-p.y > r.best) r.best = -p.y;
+  }
+  r.flyT += dt;
+  const f = Math.pow(hot ? BAL.accelFric : BAL.friction, dt);
+  p.vx *= f; p.vy *= f;
+  r.trail.push({ x:p.x, y:p.y });
+  if (r.trail.length > 26) r.trail.shift();
+  oBar();
+  if (Math.hypot(p.vx, p.vy) < BAL.stopAt || r.flyT > OTIME) oEnd();
+}
+
+function oEnd(){
+  const r = tRun;
+  r.phase = 'done';
+  r.puff.vx = r.puff.vy = 0;
+  const m = Math.floor(r.best/OMET), best = hs.oni || 0, rec = m > best;
+  if (rec) { hs.oni = m; save(); }
+  tMsg('<b>' + m + 'm</b>　4びょうの あいだに かべへ ' + r.bounce + '回'
+     + (rec ? '　<b>さいこう記録！</b>' : '　（さいこう ' + Math.max(best, m) + 'm）'));
+  oBar();
+  document.getElementById('trAgain').classList.add('show');
+}
+
+function oDraw(){
+  const r = tRun, p = r.puff;
+  // 目で追える速さで画面を送る。急に飛ぶと どこにいるか分からなくなる
+  const want = p.y - TH*0.68;
+  r.cam += (want - r.cam) * 0.25;
+  const cam = Math.min(r.cam, -TH*0.32);
+
+  tctx.setTransform(tscale,0,0,tscale,0,0);
+  tctx.fillStyle = '#0f0d0b'; tctx.fillRect(0,0,TW,TH);
+  tctx.save(); tctx.translate(0, -cam);
+
+  const y0 = cam - 20, y1 = cam + TH + 20;
+  // かべ（通路の外側）を ふさいで描く
+  tctx.fillStyle = '#241f1b';
+  for (const side of [0, 1]) {
+    tctx.beginPath();
+    for (let y = y1; y >= y0; y -= 10) {
+      const g = ogeo(y), x = side ? g.c + g.w : g.c - g.w;
+      if (y === y1) tctx.moveTo(x, y); else tctx.lineTo(x, y);
+    }
+    tctx.lineTo(side ? TW+40 : -40, y0); tctx.lineTo(side ? TW+40 : -40, y1);
+    tctx.closePath(); tctx.fill();
+  }
+  tctx.strokeStyle = '#5a4a3c'; tctx.lineWidth = 2;
+  for (const side of [0, 1]) {
+    tctx.beginPath();
+    for (let y = y1; y >= y0; y -= 10) {
+      const g = ogeo(y), x = side ? g.c + g.w : g.c - g.w;
+      if (y === y1) tctx.moveTo(x, y); else tctx.lineTo(x, y);
+    }
+    tctx.stroke();
+  }
+  // 100m ごとの目印
+  tctx.font = '600 10px "Noto Sans JP",sans-serif';
+  tctx.textAlign = 'left'; tctx.textBaseline = 'middle';
+  for (let m = Math.floor(-y1/(100*OMET)); m <= Math.ceil(-y0/(100*OMET)); m++) {
+    if (m <= 0) continue;
+    const y = -m*100*OMET, g = ogeo(y);
+    tctx.strokeStyle = 'rgba(247,183,51,.18)'; tctx.lineWidth = 1;
+    tctx.beginPath(); tctx.moveTo(g.c-g.w, y); tctx.lineTo(g.c+g.w, y); tctx.stroke();
+    tctx.fillStyle = 'rgba(247,183,51,.5)';
+    tctx.fillText(m*100 + 'm', g.c-g.w+5, y-7);
+  }
+  // 通ったあと
+  for (let i = 0; i < r.trail.length; i++) {
+    const t = r.trail[i], k = i/r.trail.length;
+    tctx.fillStyle = 'rgba(255,155,138,' + (0.30*k) + ')';
+    tctx.beginPath(); tctx.arc(t.x, t.y, BAL.r*(0.35+0.5*k), 0, 7); tctx.fill();
+  }
+  for (const f of r.fx) {
+    const k = f.t/0.3;
+    if (f.k === 'spark') {
+      tctx.fillStyle = 'rgba(255,209,102,' + (0.7*(1-k)) + ')';
+      tctx.beginPath(); tctx.arc(f.x, f.y, 5 + 20*k, 0, 7); tctx.fill();
+    } else if (f.k === 'bang') {
+      tctx.strokeStyle = 'rgba(224,114,93,' + (0.9*(1-k)) + ')';
+      tctx.lineWidth = 4*(1-k) + 1;
+      tctx.beginPath(); tctx.arc(f.x, f.y, 8 + 34*k, 0, 7); tctx.stroke();
+    }
+  }
+  tctx.beginPath(); tctx.arc(p.x, p.y, BAL.r, 0, 7);
+  tctx.fillStyle = '#3a2019'; tctx.fill();
+  tctx.strokeStyle = '#ff9b8a'; tctx.lineWidth = 2; tctx.stroke();
+  tctx.font = '22px "Noto Sans JP",sans-serif';
+  tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
+  tctx.fillText('👹', p.x, p.y + 1);
+
+  if (r.aim) {
+    const dx = r.aim.sx-r.aim.cx, dy = r.aim.sy-r.aim.cy, d = Math.hypot(dx,dy);
+    if (d > BAL.pullMin) {
+      const k = Math.min(d, BAL.pullMax)/BAL.pullMax;
+      tctx.strokeStyle = 'rgba(255,155,138,.85)'; tctx.lineWidth = 3;
+      tctx.beginPath(); tctx.moveTo(p.x, p.y);
+      tctx.lineTo(p.x + dx/d*95*k, p.y + dy/d*95*k); tctx.stroke();
+    }
+  }
+  tctx.restore();
+
+  // いまの速さ。壁を刻むと伸びるのが 見えていた方が面白い
+  const sp = Math.hypot(p.vx, p.vy);
+  const hot = r.phase === 'fly' && r.flyT < BAL.accelTime;
+  tctx.fillStyle = 'rgba(255,155,138,.20)';
+  tctx.fillRect(10, TH-16, TW-20, 6);
+  tctx.fillStyle = hot ? 'rgba(255,209,102,.95)' : 'rgba(155,139,124,.8)';
+  tctx.fillRect(10, TH-16, Math.min(1, sp/BAL.accelMax)*(TW-20), 6);
+  // ★のこりの加速時間。これが見えていないと「なぜ止まったか」が分からない
+  if (r.phase === 'fly') {
+    const left = Math.max(0, BAL.accelTime - r.flyT);
+    tctx.fillStyle = hot ? 'rgba(247,183,51,.95)' : 'rgba(155,139,124,.75)';
+    tctx.font = '700 11px "Noto Sans JP",sans-serif';
+    tctx.textAlign = 'right'; tctx.textBaseline = 'alphabetic';
+    tctx.fillText(hot ? 'かそく のこり ' + left.toFixed(1) + '秒' : 'かそく おわり', TW-10, TH-24);
+  }
+}
+
+/* ---- 遊びごとの入り口。ループからはこの2つしか呼ばない ---- */
+function tPhys(dt){ if (tRun) (tRun.id === 'oni' ? oPhys : bPhys)(dt); }
+function tDraw(){   if (tRun) (tRun.id === 'oni' ? oDraw : bDraw)(); }
 
 /* ---- 指 ---- */
 const tPt = e => {
@@ -1723,7 +1994,8 @@ cvT.addEventListener('pointermove', e => {
   const dx = a.sx-a.cx, dy = a.sy-a.cy, d = Math.hypot(dx,dy);
   if (d < BAL.pullMin || tRun.phase !== 'aim' || !tRun.puff) return;
   const k = Math.min(d, BAL.pullMax)/BAL.pullMax;
-  tRun.puff.vx = dx/d*BAL.power*k; tRun.puff.vy = dy/d*BAL.power*k;
+  const pw = BAL.power * (tRun.id === 'oni' ? 1 : TPOWER) * k;
+  tRun.puff.vx = dx/d*pw; tRun.puff.vy = dy/d*pw;
   tRun.phase = 'fly'; tRun.flyT = 0;
 }));
 
@@ -1873,7 +2145,7 @@ function renderData(){
    閉じた時に保存が消える。消えても困らないよう、文字にして持ち出せるようにする。
    人が読める形にしてあるので、写真に撮っても中身が分かる */
 const IO_HEAD  = 'HAJIKI2';   // 形を変えたら必ず上げる。古い形を黙って読むと数字が混ざる
-const GAME_VER = '3.1.0';     // ★<title> と そろえる（check.js が見張っている）
+const GAME_VER = '3.2.0';     // ★<title> と そろえる（check.js が見張っている）
 const SEASON   = 's1';        // 強化を入れるたびに数える。「まぜてよい記録」の単位
 const verLabel = (v, s) =>
   (v || '3.0.0 より前') + '／' + (s ? 'シーズン' + s.slice(1) : 'シーズン なし');
@@ -1920,9 +2192,12 @@ function parseCode(txt){
       if (parts.length !== 3 || parts.some(x => !ids.includes(x))) return null;
       const v = nums(c.slice(3, 6), 3); if (!v) return null;
       out.c[c[1] + '|' + parts.slice().sort().join('+')] = { n:v[0], w:v[1], mw:v[2] };
-    } else if (c[0] === 'H' && GAMES.some(g => g.id === c[1])) {
+    } else if (c[0] === 'H' && c[1]) {
+      /* 知らないミニゲームの行は 読み飛ばす。ことわらない。
+         ★ここで null を返すと、ミニゲームを1つ足すたびに、
+           古い版のかきだしが「対戦のきろくごと」読めなくなる */
       const v = nums(c.slice(2, 3), 1); if (!v) return null;
-      out.h[c[1]] = v[0];
+      if (GAMES.some(g => g.id === c[1])) out.h[c[1]] = v[0];
     } else return null;
   }
   return (out.m.n.n + out.m.h.n) ? out : null;

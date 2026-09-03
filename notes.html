@@ -62,7 +62,7 @@ li .why{ display:block; font-size:11.5px; color:var(--dim); margin-top:2px }
     <h1>はじきあい 変更のきろく</h1>
     <div class="sub">
       あそぶ → <a href="https://kenp0803.github.io/hajikiai/">kenp0803.github.io/hajikiai</a><br>
-      いまの版は <b>3.1.0</b>。せってい画面の一番下でも たしかめられます。
+      いまの版は <b>3.2.0</b>。せってい画面の一番下でも たしかめられます。
     </div>
     <div class="legend">
       <span><i style="background:#9fe8b0"></i>ふえた</span>
@@ -72,21 +72,43 @@ li .why{ display:block; font-size:11.5px; color:var(--dim); margin-top:2px }
   </div>
 
   <div class="v">
-    <div class="vt"><span class="num">3.1.0</span><span class="vn">れんしゅう（ミニゲーム）</span><span class="tag big">いま</span></div>
+    <div class="vt"><span class="num">3.2.0</span><span class="vn">れんしゅう（ミニゲーム）</span><span class="tag big">いま</span></div>
     <ul>
       <li class="add"><b>せってい → れんしゅう</b> から あそべます
         <span class="why">◀▶ で えらんで、「きめる」で はじまります</span></li>
-      <li class="add"><b>🐡フグのカーリング</b>
-        <span class="why">3投。<b>止まった場所</b>が 的の中心に 近いほど 高とくてん（ど真ん中は 100てん）。
-        止まった時の ばくはつに じゃま石を 巻きこむと +10。<br>
-        フグは「当てる」技ではなく <b>「置く」技</b>です。それを 指で おぼえる場所として 作りました</span></li>
+
+      <li class="add"><b>🐡フグのボウリング</b>　3ステージ、1ステージ1投
+        <span class="why"><b>ピンは すり抜けます</b>。倒れるのは、止まった場所の <b>ばくはつの輪</b>に
+        入っていたピンだけ。ねらっている間、輪の大きさが 点線で 見えています。<br>
+        1面は まっすぐ。<b>2面から先は かべで 跳ね返さないと 届きません</b>。<br>
+        ピン1本 10てん、その面を ぜんぶ倒すと +50。まん点 360てん</span></li>
+
+      <li class="add"><b>👹オニのつうろ</b>　1投して、どこまで進めるか
+        <span class="why">かべに あたるたび 速くなります。<b>ただし 速くなるのは 最初の4秒だけ</b>——
+        本番の オニと まったく同じ きまりです。通路の幅も 盤と同じ。<br>
+        <b>まっすぐ上に撃つと 一度も かべに当たらない</b>ので、いちばん損をします。
+        かといって 浅すぎると 上へ進む分が へります。<br>
+        目安：まっすぐ上 343m ／ 60度 764m。<b>ここで覚えた角度は、そのまま対戦で使えます</b></span></li>
+
       <li class="add"><b>HIGH SCORE</b> が のこります
         <span class="why"><b>「きろくを けす」を おしても 消えません</b>。ミニゲームは シーズンの外にあるので</span></li>
+
       <li class="chg"><b>ミニゲームの点は、対戦の きろくに 一切 入りません</b>
         <span class="why">しょうりつ・つかったわりあい・1回のダメージ、どれにも 混ざりません。
         混ざると シーズンの数字が 最初から こわれるので</span></li>
-      <li class="fix">👹オニのつうろ は <b>じゅんび中</b>
-        <span class="why">せまい通路を どこまで進めるか。壁を刻むほど 速くなります</span></li>
+
+      <li class="fix"><b>対戦の あそびは 1ミリも 変えていません</b>
+        <span class="why">3.0.0 から ずっと 同じ手ごたえです。シーズン1の数字は そのまま つかえます</span></li>
+    </ul>
+  </div>
+
+  <div class="v">
+    <div class="vt"><span class="num">3.1.0</span><span class="vn">れんしゅう（さいしょの形）</span></div>
+    <ul>
+      <li class="fix">カーリング（的の中心に近いほど高とくてん）を 出しましたが、
+        <b>その日のうちに ボウリングに 作り直しました</b>
+        <span class="why">1投目が どうやっても まん点に 届かず、いらいらする形でした。
+        「上手くなれば届く」ではなく「そもそも届かない」を 作ってしまっていたので</span></li>
     </ul>
   </div>
 
